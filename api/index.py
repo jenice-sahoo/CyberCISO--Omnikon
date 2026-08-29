@@ -136,8 +136,11 @@ async def chat(req: ChatRequest):
             # Explicit system prompt that forbids CoT leakage
             system_prompt = (
                 f"You are a Virtual CISO for a {vertical.value} small business. "
-                f"Ask exactly ONE short, simple question per turn. "
-                f"Use the previous conversation to choose the most relevant next cybersecurity question. "
+                f"Ask exactly ONE short, simple cybersecurity question per turn. "
+                f"Use the previous conversation to choose the most relevant next question. "
+                f"NEVER repeat a question that has already been asked. "
+                f"Do not ask the same question using slightly different wording. "
+                f"Cover a different cybersecurity area when possible. "
                 f"Do not explain your reasoning. "
                 f"Do not output XML tags, <think>, <thinking>, or chain-of-thought. "
                 f"Output only the question."
@@ -162,6 +165,42 @@ async def chat(req: ChatRequest):
 
             res = await client.chat.completions.create(**kwargs)
             content = (res.choices[0].message.content or "").strip()
+
+            # Prevent the AI from repeating an already-asked question
+            previous_questions = [
+                m.content.strip()
+                for m in req.conversation_history
+                if m.role == "assistant"
+            ]
+
+            previous_questions_lower = {q.lower() for q in previous_questions}
+
+            if content.strip().lower() in previous_questions_lower:
+                excluded = "\n".join(f"- {q}" for q in previous_questions)
+
+                retry_msgs = msgs + [{
+                    "role": "system",
+                    "content": (
+                        "The question you generated has already been asked. "
+                        "You MUST generate a different question. "
+                        "Do not repeat or rephrase any of these previous questions:\n"
+                        f"{excluded}\n"
+                        "Output ONLY one new short cybersecurity question."
+                    )
+                }]
+
+                retry_kwargs = {
+                    "model": model_name,
+                    "messages": retry_msgs,
+                    "max_tokens": 128,
+                    "temperature": 0.2
+                }
+
+            if model_name.startswith("qwen/"):
+                retry_kwargs["reasoning_format"] = "hidden"
+
+            retry_res = await client.chat.completions.create(**retry_kwargs)
+            content = (retry_res.choices[0].message.content or "").strip()
             # Robustly strip reasoning / CoT blocks from various models (Groq Llama, Gemma, Qwen, DeepSeek)
             # Covers: <think>...</think>, <thinking>...</thinking>, <thought>...</thought>, "thinking"/"response" delimiters
             import re
