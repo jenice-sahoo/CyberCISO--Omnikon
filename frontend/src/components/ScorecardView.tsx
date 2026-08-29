@@ -1,18 +1,13 @@
 'use client';
 
 import {
-  useState,
-} from 'react';
-
-import {
-  ArrowLeft,
+  AlertCircle,
   ArrowUpRight,
   BarChart3,
+  Calendar,
   CheckCircle2,
-  ChevronRight,
   Database,
   Download,
-  FileText,
   Lock,
   Mail,
   Network,
@@ -21,82 +16,77 @@ import {
   Siren,
   Sparkles,
   Target,
-  TrendingUp,
-  TriangleAlert,
 } from 'lucide-react';
 
-import {
-  ScorecardResponse,
-} from '@/types';
+import type { ScorecardResponse } from '@/types';
 
 import {
-  cn,
   formatCategory,
   formatVertical,
-  getPriorityColor,
 } from '@/lib/utils';
-
 
 /* ============================================================
    PROPS
    ============================================================ */
 
 interface ScorecardViewProps {
-
-  scorecard:
-    ScorecardResponse;
-
-  onRestart:
-    () => void;
-
-  onDownloadPDF:
-    () => Promise<void>;
-
+  scorecard: ScorecardResponse;
+  onRestart: () => void;
+  onDownloadPDF: () => Promise<void>;
 }
 
-
 /* ============================================================
-   DOMAIN ICONS
+   ICONS
    ============================================================ */
 
 const DOMAIN_ICONS: Record<
   string,
   typeof Shield
 > = {
-
-  access_control:
-    Shield,
-
-  data_backup:
-    Database,
-
-  network_security:
-    Network,
-
-  email_phishing_readiness:
-    Mail,
-
-  email_phishing:
-    Mail,
-
-  incident_response:
-    Siren,
-
+  access_control: Shield,
+  data_backup: Database,
+  network_security: Network,
+  email_phishing: Mail,
+  email_phishing_readiness: Mail,
+  incident_response: Siren,
 };
 
-
 /* ============================================================
-   GRADE HELPERS
+   HELPERS
    ============================================================ */
 
-function gradeText(
-  grade: string
-): string {
+function clampScore(score: number): number {
+  if (!Number.isFinite(score)) {
+    return 0;
+  }
 
-  switch (
-    grade.toUpperCase()
-  ) {
+  return Math.max(0, Math.min(100, score));
+}
 
+function getGradeClass(grade: string): string {
+  switch (grade.toUpperCase()) {
+    case 'A':
+      return 'from-emerald-300 via-green-400 to-cyan-400';
+
+    case 'B':
+      return 'from-violet-300 via-purple-400 to-blue-400';
+
+    case 'C':
+      return 'from-amber-300 via-yellow-400 to-orange-400';
+
+    case 'D':
+      return 'from-orange-300 via-red-400 to-pink-400';
+
+    case 'F':
+      return 'from-red-400 via-rose-500 to-fuchsia-500';
+
+    default:
+      return 'from-violet-300 to-blue-400';
+  }
+}
+
+function getGradeText(grade: string): string {
+  switch (grade.toUpperCase()) {
     case 'A':
       return 'text-emerald-300';
 
@@ -114,56 +104,16 @@ function gradeText(
 
     default:
       return 'text-violet-300';
-
   }
-
 }
 
-
-function gradeGradient(
-  grade: string
-): string {
-
-  switch (
-    grade.toUpperCase()
-  ) {
-
-    case 'A':
-      return 'from-emerald-400 via-cyan-400 to-blue-400';
-
-    case 'B':
-      return 'from-violet-400 via-fuchsia-400 to-blue-400';
-
-    case 'C':
-      return 'from-amber-300 via-yellow-400 to-orange-400';
-
-    case 'D':
-      return 'from-orange-400 via-red-400 to-pink-400';
-
-    case 'F':
-      return 'from-red-500 via-rose-500 to-fuchsia-500';
-
-    default:
-      return 'from-violet-400 to-blue-400';
-
-  }
-
-}
-
-
-function scoreBarGradient(
-  grade: string
-): string {
-
-  switch (
-    grade.toUpperCase()
-  ) {
-
+function getBarGradient(grade: string): string {
+  switch (grade.toUpperCase()) {
     case 'A':
       return 'from-emerald-400 to-cyan-400';
 
     case 'B':
-      return 'from-violet-500 to-blue-500';
+      return 'from-violet-500 to-blue-400';
 
     case 'C':
       return 'from-amber-400 to-orange-400';
@@ -176,42 +126,27 @@ function scoreBarGradient(
 
     default:
       return 'from-violet-500 to-blue-500';
-
   }
-
 }
 
+function getPriorityClasses(priority: string): string {
+  switch (priority.toLowerCase()) {
+    case 'critical':
+      return 'border-red-400/20 bg-red-500/[0.08] text-red-300';
 
-function gradeDescription(
-  grade: string
-): string {
+    case 'high':
+      return 'border-orange-400/20 bg-orange-500/[0.08] text-orange-300';
 
-  switch (
-    grade.toUpperCase()
-  ) {
+    case 'medium':
+      return 'border-amber-400/20 bg-amber-500/[0.08] text-amber-300';
 
-    case 'A':
-      return 'Excellent security posture';
-
-    case 'B':
-      return 'Good security posture';
-
-    case 'C':
-      return 'Moderate security posture';
-
-    case 'D':
-      return 'Needs improvement';
-
-    case 'F':
-      return 'Critical improvements required';
+    case 'low':
+      return 'border-blue-400/20 bg-blue-500/[0.08] text-blue-300';
 
     default:
-      return 'Assessment completed';
-
+      return 'border-white/10 bg-white/[0.04] text-gray-400';
   }
-
 }
-
 
 /* ============================================================
    SCORE RING
@@ -224,59 +159,38 @@ function ScoreRing({
   score: number;
   grade: string;
 }) {
+  const safeScore = clampScore(score);
 
-  const radius =
-    82;
-
-  const circumference =
-    2 *
-    Math.PI *
-    radius;
-
-  const safeScore =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        score
-      )
-    );
+  const radius = 82;
+  const circumference = 2 * Math.PI * radius;
 
   const offset =
     circumference -
-    (safeScore /
-      100) *
-      circumference;
-
+    (safeScore / 100) * circumference;
 
   return (
-
-    <div className="relative w-60 h-60 mx-auto">
-
-      <div className="absolute inset-10 rounded-full bg-violet-600/20 blur-[55px]" />
-
+    <div className="relative mx-auto h-64 w-64">
+      <div className="absolute inset-8 rounded-full bg-violet-600/20 blur-[55px]" />
 
       <svg
         viewBox="0 0 200 200"
-        className="relative w-full h-full -rotate-90"
+        className="relative h-full w-full -rotate-90"
       >
-
         <circle
           cx="100"
           cy="100"
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.05)"
+          stroke="rgba(255,255,255,0.06)"
           strokeWidth="10"
         />
 
-
         <circle
           cx="100"
           cy="100"
           r={radius}
           fill="none"
-          stroke="url(#scoreGradient)"
+          stroke="url(#cyberScoreGradient)"
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -284,17 +198,14 @@ function ScoreRing({
           className="transition-all duration-1000"
         />
 
-
         <defs>
-
           <linearGradient
-            id="scoreGradient"
+            id="cyberScoreGradient"
             x1="0%"
             y1="0%"
             x2="100%"
             y2="100%"
           >
-
             <stop
               offset="0%"
               stopColor="#8b5cf6"
@@ -302,1096 +213,672 @@ function ScoreRing({
 
             <stop
               offset="50%"
-              stopColor="#d946ef"
+              stopColor="#c084fc"
             />
 
             <stop
               offset="100%"
               stopColor="#38bdf8"
             />
-
           </linearGradient>
-
         </defs>
-
       </svg>
 
-
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-
         <div
-          className={cn(
-            'text-6xl font-black bg-gradient-to-br bg-clip-text text-transparent',
-            gradeGradient(grade)
-          )}
+          className={`bg-gradient-to-br bg-clip-text text-6xl font-black tracking-tight text-transparent ${getGradeClass(
+            grade
+          )}`}
         >
           {grade}
         </div>
 
-
-        <div className="text-3xl font-bold text-white mt-1">
-
-          {score}
-
-          <span className="text-sm text-gray-600 font-normal">
+        <div className="mt-1 text-3xl font-bold text-white">
+          {safeScore}
+          <span className="text-sm font-normal text-gray-600">
             /100
           </span>
-
         </div>
 
-
-        <p className="text-[8px] uppercase tracking-[0.22em] text-gray-600 mt-2">
+        <div className="mt-2 text-[9px] uppercase tracking-[0.22em] text-gray-600">
           Security posture
-        </p>
-
+        </div>
       </div>
-
     </div>
-
   );
 }
 
+/* ============================================================
+   MINI BAR CHART
+   ============================================================ */
+
+function DomainChart({
+  categories,
+}: {
+  categories: ScorecardResponse['sub_categories'];
+}) {
+  return (
+    <div className="space-y-5">
+      {categories.map((category, index) => {
+        const Icon =
+          DOMAIN_ICONS[category.category] ??
+          Shield;
+
+        const score = clampScore(category.score);
+
+        return (
+          <div key={`${category.category}-${index}`}>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-violet-400/10 bg-violet-500/[0.07]">
+                  <Icon className="h-3.5 w-3.5 text-violet-400" />
+                </div>
+
+                <span className="truncate text-xs text-gray-400">
+                  {formatCategory(category.category)}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-300">
+                  {score}
+                </span>
+
+                <span
+                  className={`text-[9px] font-bold ${getGradeText(
+                    category.grade
+                  )}`}
+                >
+                  {category.grade}
+                </span>
+              </div>
+            </div>
+
+            <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r ${getBarGradient(
+                  category.grade
+                )} transition-all duration-700`}
+                style={{
+                  width: `${score}%`,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /* ============================================================
-   MAIN COMPONENT
+   MAIN
    ============================================================ */
 
 export default function ScorecardView({
-
   scorecard,
-
   onRestart,
-
   onDownloadPDF,
-
 }: ScorecardViewProps) {
+  const safeScore = clampScore(
+    scorecard.overall_score
+  );
 
-  const [
-    downloading,
-    setDownloading,
-  ] = useState(false);
+  const [downloading, setDownloading] =
+    useState(false);
 
+  const handleDownload = async () => {
+    if (downloading) {
+      return;
+    }
 
-  const sortedCategories =
-    [...scorecard.sub_categories]
-      .sort(
-        (a, b) =>
-          a.score -
-          b.score
-      );
+    setDownloading(true);
 
-
-  const weakest =
-    sortedCategories[0];
-
-
-  const strongest =
-    sortedCategories[
-      sortedCategories.length - 1
-    ];
-
-
-  const handleDownload =
-    async () => {
-
-      setDownloading(
-        true
-      );
-
-      try {
-
-        await onDownloadPDF();
-
-      } finally {
-
-        setDownloading(
-          false
-        );
-
-      }
-
-    };
-
+    try {
+      await onDownloadPDF();
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
-
-    <div className="min-h-screen bg-[#05040b] text-white">
-
-
+    <div className="relative min-h-screen overflow-x-hidden bg-[#05040b] text-white">
       {/* ======================================================
           BACKGROUND
           ====================================================== */}
 
-      <div className="fixed inset-0 pointer-events-none">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute left-[25%] top-[-220px] h-[600px] w-[700px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
 
-        <div className="absolute top-[-250px] left-[30%] w-[750px] h-[550px] rounded-full bg-violet-700/[0.09] blur-[180px]" />
+        <div className="absolute right-[-180px] top-[35%] h-[550px] w-[550px] rounded-full bg-blue-700/[0.05] blur-[180px]" />
 
-        <div className="absolute right-[-200px] top-[35%] w-[600px] h-[600px] rounded-full bg-fuchsia-700/[0.04] blur-[180px]" />
-
-        <div className="absolute bottom-[-250px] left-[10%] w-[550px] h-[450px] rounded-full bg-blue-700/[0.04] blur-[170px]" />
-
+        <div className="absolute bottom-[-200px] left-[15%] h-[500px] w-[500px] rounded-full bg-fuchsia-700/[0.05] blur-[180px]" />
       </div>
 
-
-      {/* GRID */}
-
       <div
-        className="fixed inset-0 opacity-[0.025] pointer-events-none"
+        className="pointer-events-none fixed inset-0 opacity-[0.025]"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
-          backgroundSize:
-            '48px 48px',
+          backgroundSize: '48px 48px',
         }}
       />
 
-
-      <div className="relative z-10 min-h-screen">
-
-
-        {/* ====================================================
+      <div className="relative z-10">
+        {/* ==================================================
             HEADER
-            ==================================================== */}
+            ================================================== */}
 
-        <header className="h-16 border-b border-white/[0.06] bg-[#07050d]/90 backdrop-blur-xl">
-
-          <div className="max-w-[1400px] mx-auto h-full px-5 lg:px-8 flex items-center justify-between">
-
+        <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#07060d]/90 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5">
             <div className="flex items-center gap-3">
-
-              <button
-                type="button"
-                onClick={
-                  onRestart
-                }
-                className="w-8 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/[0.05] transition"
-                aria-label="Back"
-              >
-
-                <ArrowLeft className="w-3.5 h-3.5" />
-
-              </button>
-
-
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-
-                <Shield className="w-4 h-4 text-white" />
-
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 shadow-lg shadow-violet-500/20">
+                <Shield className="h-4 w-4 text-white" />
               </div>
-
 
               <div>
-
-                <p className="text-[10px] font-semibold">
+                <div className="text-sm font-semibold text-white">
                   CyberCISO
-                </p>
+                </div>
 
-                <p className="text-[7px] text-gray-600 uppercase tracking-[0.2em]">
-                  Security Report
-                </p>
-
+                <div className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                  Security Intelligence
+                </div>
               </div>
-
             </div>
 
+            <div className="flex items-center gap-2">
+              <div className="hidden items-center gap-2 rounded-full border border-emerald-400/10 bg-emerald-500/[0.05] px-3 py-1.5 sm:flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
 
-            <div className="flex items-center gap-3">
-
-              <div className="hidden sm:flex items-center gap-2 text-[8px] text-gray-600">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-
-                Assessment complete
-
+                <span className="text-[10px] text-emerald-400/80">
+                  Assessment complete
+                </span>
               </div>
 
-
-              <span className="px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[9px] text-violet-300">
-
+              <div className="rounded-full border border-violet-400/10 bg-violet-500/[0.06] px-3 py-1.5 text-[10px] text-violet-300">
                 {formatVertical(
                   scorecard.vertical
                 )}
-
-              </span>
-
+              </div>
             </div>
-
           </div>
-
         </header>
 
+        {/* ==================================================
+            MAIN
+            ================================================== */}
 
-        {/* ====================================================
-            PAGE
-            ==================================================== */}
-
-        <main className="max-w-[1400px] mx-auto px-5 lg:px-8 py-8">
-
-
+        <main className="mx-auto max-w-7xl px-5 py-8">
           {/* TITLE */}
-
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-6">
-
-            <div>
-
-              <div className="flex items-center gap-2 mb-2">
-
-                <span className="text-[8px] uppercase tracking-[0.24em] text-violet-400">
-                  Assessment Results
-                </span>
-
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/[0.07] border border-emerald-400/10 text-[7px] text-emerald-400">
-                  COMPLETE
-                </span>
-
-              </div>
-
-
-              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-
-                Security posture
-                <span className="text-violet-400">
-                  .
-                </span>
-
-              </h1>
-
-
-              <p className="text-[10px] text-gray-600 mt-2">
-                Your CyberCISO assessment results and prioritized security insights.
-              </p>
-
+          <div className="mb-8">
+            <div className="mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[0.25em] text-violet-400/70">
+              <Sparkles className="h-3.5 w-3.5" />
+              Security intelligence report
             </div>
 
-
-            <div className="flex items-center gap-2">
-
-              <button
-                type="button"
-                onClick={
-                  handleDownload
-                }
-                disabled={
-                  downloading
-                }
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-violet-400/20 bg-violet-500/[0.08] text-violet-200 hover:bg-violet-500/[0.14] transition disabled:opacity-50 text-[10px] font-medium"
-              >
-
-                <Download className="w-3.5 h-3.5" />
-
-                {downloading
-                  ? 'Generating...'
-                  : 'Download Report'}
-
-              </button>
-
-
-              <button
-                type="button"
-                onClick={
-                  onRestart
-                }
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-gray-400 hover:text-white hover:bg-white/[0.06] transition text-[10px] font-medium"
-              >
-
-                <RotateCcw className="w-3.5 h-3.5" />
-
-                New Assessment
-
-              </button>
-
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              TOP DASHBOARD
-              ================================================= */}
-
-          <div className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-4 mb-5">
-
-
-            {/* SCORE */}
-
-            <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0911]/90 p-6">
-
-              <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-violet-600/[0.08] blur-3xl" />
-
-              <div className="relative">
-
-                <div className="flex items-center justify-between mb-2">
-
-                  <div>
-
-                    <p className="text-[9px] uppercase tracking-[0.18em] text-gray-600">
-                      Overall assessment
-                    </p>
-
-                    <p className="text-[8px] text-gray-700 mt-1">
-                      Based on 5 security domains
-                    </p>
-
-                  </div>
-
-
-                  <div className="w-8 h-8 rounded-lg bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                    <Shield className="w-4 h-4 text-violet-400" />
-
-                  </div>
-
-                </div>
-
-
-                <ScoreRing
-                  score={
-                    scorecard.overall_score
-                  }
-                  grade={
-                    scorecard.overall_grade
-                  }
-                />
-
-
-                <div className="flex justify-center mt-1">
-
-                  <div
-                    className={cn(
-                      'px-3 py-1.5 rounded-full border border-white/[0.07] bg-white/[0.025] text-[9px] font-medium',
-                      gradeText(
-                        scorecard.overall_grade
-                      )
-                    )}
-                  >
-
-                    {gradeDescription(
-                      scorecard.overall_grade
-                    )}
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </section>
-
-
-            {/* ANALYTICS */}
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0a0911]/90 p-6">
-
-              <div className="flex items-center justify-between mb-5">
-
-                <div>
-
-                  <p className="text-[10px] text-gray-300">
-                    Security domain analysis
-                  </p>
-
-                  <p className="text-[8px] text-gray-700 mt-1">
-                    Performance across your assessment areas
-                  </p>
-
-                </div>
-
-
-                <BarChart3 className="w-4 h-4 text-violet-400" />
-
-              </div>
-
-
-              <div className="space-y-4">
-
-                {scorecard.sub_categories.map(
-                  (
-                    category
-                  ) => {
-
-                    const Icon =
-                      DOMAIN_ICONS[
-                        category.category
-                      ] || Shield;
-
-                    const score =
-                      Math.max(
-                        0,
-                        Math.min(
-                          100,
-                          category.score
-                        )
-                      );
-
-
-                    return (
-
-                      <div
-                        key={
-                          category.category
-                        }
-                      >
-
-                        <div className="flex items-center justify-between mb-1.5">
-
-                          <div className="flex items-center gap-2.5">
-
-                            <div className="w-7 h-7 rounded-lg bg-violet-500/[0.08] border border-violet-400/[0.08] flex items-center justify-center">
-
-                              <Icon className="w-3.5 h-3.5 text-violet-400" />
-
-                            </div>
-
-
-                            <span className="text-[9px] text-gray-400">
-                              {formatCategory(
-                                category.category
-                              )}
-                            </span>
-
-                          </div>
-
-
-                          <div className="flex items-center gap-2">
-
-                            <span className="text-[9px] font-semibold text-gray-300">
-                              {category.score}
-                            </span>
-
-                            <span
-                              className={cn(
-                                'text-[8px] font-bold',
-                                gradeText(
-                                  category.grade
-                                )
-                              )}
-                            >
-                              {category.grade}
-                            </span>
-
-                          </div>
-
-                        </div>
-
-
-                        <div className="h-2 rounded-full bg-white/[0.04] overflow-hidden">
-
-                          <div
-                            className={cn(
-                              'h-full rounded-full bg-gradient-to-r transition-all duration-1000',
-                              scoreBarGradient(
-                                category.grade
-                              )
-                            )}
-                            style={{
-                              width:
-                                `${score}%`,
-                            }}
-                          />
-
-                        </div>
-
-                      </div>
-
-                    );
-
-                  }
-                )}
-
-              </div>
-
-
-              {/* INSIGHT BOXES */}
-
-              <div className="grid sm:grid-cols-2 gap-3 mt-5">
-
-                <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-3">
-
-                  <div className="flex items-center gap-2 mb-1">
-
-                    <TrendingUp className="w-3 h-3 text-emerald-400" />
-
-                    <span className="text-[8px] uppercase tracking-wider text-gray-600">
-                      Strongest
-                    </span>
-
-                  </div>
-
-                  <p className="text-[10px] text-gray-300">
-                    {strongest
-                      ? formatCategory(
-                          strongest.category
-                        )
-                      : '—'}
-                  </p>
-
-                  {strongest && (
-                    <p className="text-[8px] text-emerald-400 mt-1">
-                      {strongest.score}/100
-                    </p>
-                  )}
-
-                </div>
-
-
-                <div className="rounded-xl border border-red-400/[0.08] bg-red-500/[0.025] p-3">
-
-                  <div className="flex items-center gap-2 mb-1">
-
-                    <TriangleAlert className="w-3 h-3 text-red-400" />
-
-                    <span className="text-[8px] uppercase tracking-wider text-gray-600">
-                      Priority
-                    </span>
-
-                  </div>
-
-                  <p className="text-[10px] text-gray-300">
-                    {weakest
-                      ? formatCategory(
-                          weakest.category
-                        )
-                      : '—'}
-                  </p>
-
-                  {weakest && (
-                    <p className="text-[8px] text-red-400 mt-1">
-                      {weakest.score}/100
-                    </p>
-                  )}
-
-                </div>
-
-              </div>
-
-            </section>
-
-          </div>
-
-
-          {/* =================================================
-              SUMMARY STATS
-              ================================================= */}
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <Shield className="w-3.5 h-3.5 text-violet-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Score
-                </span>
-
-              </div>
-
-              <p className="text-2xl font-semibold text-white">
-                {scorecard.overall_score}
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <Target className="w-3.5 h-3.5 text-fuchsia-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Domains
-                </span>
-
-              </div>
-
-              <p className="text-2xl font-semibold text-white">
-                {scorecard.sub_categories.length}
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <FileText className="w-3.5 h-3.5 text-blue-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Actions
-                </span>
-
-              </div>
-
-              <p className="text-2xl font-semibold text-white">
-                {scorecard.remediation_plan.length}
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <Lock className="w-3.5 h-3.5 text-emerald-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Framework
-                </span>
-
-              </div>
-
-              <p className="text-[13px] font-semibold text-white mt-1">
-                NIST + CIS
-              </p>
-
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              SECURITY DOMAINS
-              ================================================= */}
-
-          <section className="mb-7">
-
-            <div className="flex items-end justify-between mb-4">
-
+            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
               <div>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Security posture
+                  <span className="text-violet-400">.</span>
+                </h1>
 
-                <div className="flex items-center gap-2">
+                <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">
+                  Your CyberCISO assessment results,
+                  security insights and prioritized
+                  remediation plan.
+                </p>
+              </div>
 
-                  <Target className="w-4 h-4 text-violet-400" />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="flex items-center gap-2 rounded-xl border border-violet-400/20 bg-violet-500/[0.08] px-4 py-2.5 text-xs font-medium text-violet-200 transition hover:bg-violet-500/[0.14] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Download className="h-3.5 w-3.5" />
 
-                  <h2 className="text-lg font-semibold text-gray-200">
-                    Security domains
-                  </h2>
+                  {downloading
+                    ? 'Generating...'
+                    : 'Download report'}
+                </button>
 
+                <button
+                  type="button"
+                  onClick={onRestart}
+                  className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-4 py-2.5 text-xs font-medium text-gray-400 transition hover:bg-white/[0.05] hover:text-white"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  New assessment
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ==================================================
+              HERO DASHBOARD
+              ================================================== */}
+
+          <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+            {/* SCORE */}
+            <section className="rounded-2xl border border-white/[0.07] bg-[#08070e]/90 p-6">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-gray-600">
+                    Overall security score
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-700">
+                    Based on your assessment
+                  </p>
                 </div>
 
-                <p className="text-[9px] text-gray-600 mt-1">
-                  Detailed findings across your assessment areas.
+                <BarChart3 className="h-4 w-4 text-violet-400" />
+              </div>
+
+              <ScoreRing
+                score={safeScore}
+                grade={scorecard.overall_grade}
+              />
+
+              <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+                <p className="text-[9px] uppercase tracking-[0.18em] text-gray-700">
+                  Business type
                 </p>
 
+                <p className="mt-1 text-sm font-medium text-gray-300">
+                  {formatVertical(
+                    scorecard.vertical
+                  )}
+                </p>
+              </div>
+            </section>
+
+            {/* DOMAIN ANALYSIS */}
+            <section className="rounded-2xl border border-white/[0.07] bg-[#08070e]/90 p-6">
+              <div className="mb-6 flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-violet-400" />
+
+                    <h2 className="text-sm font-semibold text-gray-200">
+                      Security domain analysis
+                    </h2>
+                  </div>
+
+                  <p className="mt-1 text-[10px] text-gray-600">
+                    Performance across your five assessment areas.
+                  </p>
+                </div>
+
+                <span className="rounded-full border border-violet-400/10 bg-violet-500/[0.05] px-2.5 py-1 text-[9px] text-violet-300">
+                  {scorecard.sub_categories.length} domains
+                </span>
               </div>
 
+              <DomainChart
+                categories={scorecard.sub_categories}
+              />
+            </section>
+          </div>
+
+          {/* ==================================================
+              SUMMARY CARDS
+              ================================================== */}
+
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+              <p className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                Overall score
+              </p>
+
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {safeScore}
+                <span className="text-xs font-normal text-gray-700">
+                  /100
+                </span>
+              </p>
             </div>
 
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+              <p className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                Security domains
+              </p>
 
-            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {scorecard.sub_categories.length}
+              </p>
+            </div>
 
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+              <p className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                Remediation actions
+              </p>
+
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {scorecard.remediation_plan.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-4">
+              <p className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                Framework
+              </p>
+
+              <p className="mt-2 text-sm font-semibold text-white">
+                NIST + CIS
+              </p>
+            </div>
+          </div>
+
+          {/* ==================================================
+              SECURITY DOMAINS
+              ================================================== */}
+
+          <section className="mt-8">
+            <div className="mb-5">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-violet-400" />
+
+                <h2 className="text-lg font-semibold text-gray-200">
+                  Security domains
+                </h2>
+              </div>
+
+              <p className="mt-1 text-xs text-gray-600">
+                Detailed findings across your assessment.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {scorecard.sub_categories.map(
-                (
-                  category
-                ) => {
-
+                (category, index) => {
                   const Icon =
                     DOMAIN_ICONS[
                       category.category
-                    ] || Shield;
+                    ] ?? Shield;
 
+                  const score = clampScore(
+                    category.score
+                  );
 
                   return (
-
                     <article
-                      key={
-                        category.category
-                      }
-                      className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/90 p-5 hover:border-violet-400/[0.18] transition-all"
+                      key={`${category.category}-${index}`}
+                      className="rounded-2xl border border-white/[0.07] bg-[#08070e]/90 p-5 transition hover:border-violet-400/20 hover:bg-white/[0.035]"
                     >
-
-                      <div className="flex items-start justify-between mb-5">
-
+                      <div className="mb-5 flex items-start justify-between">
                         <div className="flex items-center gap-3">
-
-                          <div className="w-10 h-10 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                            <Icon className="w-4 h-4 text-violet-400" />
-
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-400/10 bg-violet-500/[0.08]">
+                            <Icon className="h-4 w-4 text-violet-400" />
                           </div>
 
-
                           <div>
-
-                            <h3 className="text-[11px] font-medium text-gray-200">
+                            <h3 className="text-sm font-medium text-gray-200">
                               {formatCategory(
                                 category.category
                               )}
                             </h3>
 
-                            <p className="text-[8px] text-gray-600 mt-0.5">
+                            <p className="mt-0.5 text-[9px] text-gray-600">
                               Security domain
                             </p>
-
                           </div>
-
                         </div>
-
-
-                        <div
-                          className={cn(
-                            'w-8 h-8 rounded-lg border border-white/[0.07] bg-white/[0.025] flex items-center justify-center text-[10px] font-bold',
-                            gradeText(
-                              category.grade
-                            )
-                          )}
-                        >
-                          {category.grade}
-                        </div>
-
-                      </div>
-
-
-                      <div className="flex items-end justify-between mb-2">
-
-                        <div>
-
-                          <span className="text-3xl font-semibold text-white">
-                            {category.score}
-                          </span>
-
-                          <span className="text-[9px] text-gray-700 ml-1">
-                            /100
-                          </span>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden mb-4">
-
-                        <div
-                          className={cn(
-                            'h-full rounded-full bg-gradient-to-r',
-                            scoreBarGradient(
-                              category.grade
-                            )
-                          )}
-                          style={{
-                            width:
-                              `${Math.max(
-                                0,
-                                Math.min(
-                                  100,
-                                  category.score
-                                )
-                              )}%`,
-                          }}
-                        />
-
-                      </div>
-
-
-                      {category.findings.length > 0 && (
-
-                        <div className="space-y-2">
-
-                          <p className="text-[8px] uppercase tracking-[0.16em] text-gray-700">
-                            Findings
-                          </p>
-
-
-                          {category.findings
-                            .slice(0, 3)
-                            .map(
-                              (
-                                finding,
-                                index
-                              ) => (
-
-                                <div
-                                  key={
-                                    index
-                                  }
-                                  className="flex gap-2"
-                                >
-
-                                  <span className="w-1 h-1 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
-
-                                  <p className="text-[8px] leading-relaxed text-gray-600">
-                                    {finding}
-                                  </p>
-
-                                </div>
-
-                              )
-                            )}
-
-                        </div>
-
-                      )}
-
-                    </article>
-
-                  );
-
-                }
-              )}
-
-            </div>
-
-          </section>
-
-
-          {/* =================================================
-              REMEDIATION PLAN
-              ================================================= */}
-
-          <section className="mb-7">
-
-            <div className="flex items-center gap-2 mb-1">
-
-              <Sparkles className="w-4 h-4 text-violet-400" />
-
-              <h2 className="text-lg font-semibold text-gray-200">
-                Prioritized remediation plan
-              </h2>
-
-            </div>
-
-            <p className="text-[9px] text-gray-600 mb-4">
-              Recommended actions based on your assessment findings.
-            </p>
-
-
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/90 overflow-hidden">
-
-              {scorecard.remediation_plan.map(
-                (
-                  action,
-                  index
-                ) => (
-
-                  <div
-                    key={`${action.day}-${index}`}
-                    className="group flex gap-4 p-5 border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.02] transition"
-                  >
-
-                    <div className="flex flex-col items-center">
-
-                      <div className="w-9 h-9 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                        <span className="text-[10px] font-semibold text-violet-300">
-                          {action.day}
-                        </span>
-
-                      </div>
-
-                      <span className="text-[7px] uppercase tracking-wider text-gray-700 mt-1">
-                        Day
-                      </span>
-
-                    </div>
-
-
-                    <div className="flex-1 min-w-0">
-
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
 
                         <span
-                          className={cn(
-                            'px-2 py-1 rounded-md text-[8px] font-semibold',
-                            getPriorityColor(
-                              action.priority
-                            )
-                          )}
+                          className={`text-sm font-bold ${getGradeText(
+                            category.grade
+                          )}`}
                         >
-                          {action.priority}
+                          {category.grade}
                         </span>
-
-
-                        <span className="px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.05] text-[8px] text-gray-500">
-                          {formatCategory(
-                            action.category
-                          )}
-                        </span>
-
                       </div>
 
-
-                      <p className="text-[11px] text-gray-300 leading-relaxed font-medium">
-                        {action.action}
-                      </p>
-
-
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[8px] text-gray-700">
-
-                        <span>
-
-                          <span className="text-gray-500">
-                            NIST:
-                          </span>{' '}
-
-                          {action.nist_function}
-
-                          {' / '}
-
-                          {action.nist_category}
-
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-2xl font-semibold text-white">
+                          {score}
                         </span>
 
-
-                        <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
-
-
-                        <span>
-
-                          <span className="text-gray-500">
-                            CIS:
-                          </span>{' '}
-
-                          {action.cis_control}
-
+                        <span className="text-[9px] text-gray-600">
+                          /100
                         </span>
-
-
-                        <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
-
-
-                        <span>
-                          {action.effort_estimate}
-                        </span>
-
                       </div>
 
-                    </div>
+                      <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${getBarGradient(
+                            category.grade
+                          )}`}
+                          style={{
+                            width: `${score}%`,
+                          }}
+                        />
+                      </div>
 
+                      {category.findings.length >
+                        0 && (
+                        <div>
+                          <p className="mb-2 text-[9px] uppercase tracking-[0.16em] text-gray-700">
+                            Key findings
+                          </p>
 
-                    <ArrowUpRight className="w-4 h-4 text-gray-700 group-hover:text-violet-400 flex-shrink-0 transition" />
+                          <ul className="space-y-2">
+                            {category.findings
+                              .slice(0, 3)
+                              .map(
+                                (
+                                  finding,
+                                  findingIndex
+                                ) => (
+                                  <li
+                                    key={`${finding}-${findingIndex}`}
+                                    className="flex gap-2 text-[10px] leading-5 text-gray-500"
+                                  >
+                                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-violet-400/60" />
 
-                  </div>
-
-                )
+                                    <span>
+                                      {finding}
+                                    </span>
+                                  </li>
+                                )
+                              )}
+                          </ul>
+                        </div>
+                      )}
+                    </article>
+                  );
+                }
               )}
-
             </div>
-
           </section>
 
+          {/* ==================================================
+              REMEDIATION PLAN
+              ================================================== */}
 
-          {/* =================================================
-              FRAMEWORKS
-              ================================================= */}
+          <section className="mt-8">
+            <div className="mb-5 flex items-end justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-violet-400" />
 
-          <section className="grid md:grid-cols-2 gap-4 mb-6">
-
-            <div className="rounded-2xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-5">
-
-              <div className="flex items-center gap-3 mb-4">
-
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/[0.08] border border-emerald-400/10 flex items-center justify-center">
-
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-
+                  <h2 className="text-lg font-semibold text-gray-200">
+                    30-day remediation plan
+                  </h2>
                 </div>
 
+                <p className="mt-1 text-xs text-gray-600">
+                  Prioritized actions to strengthen your security posture.
+                </p>
+              </div>
+
+              <span className="text-[9px] text-gray-700">
+                {scorecard.remediation_plan.length} actions
+              </span>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#08070e]/90">
+              {scorecard.remediation_plan.map(
+                (action, index) => (
+                  <div
+                    key={`${action.day}-${index}`}
+                    className="border-b border-white/[0.06] p-5 last:border-b-0"
+                  >
+                    <div className="flex gap-4">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-400/10 bg-violet-500/[0.06] text-xs font-semibold text-violet-300">
+                        {action.day}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2 py-1 text-[8px] font-medium ${getPriorityClasses(
+                              action.priority
+                            )}`}
+                          >
+                            {action.priority}
+                          </span>
+
+                          <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2 py-1 text-[8px] text-gray-600">
+                            {formatCategory(
+                              action.category
+                            )}
+                          </span>
+                        </div>
+
+                        <p className="text-sm leading-6 text-gray-300">
+                          {action.action}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[8px] text-gray-600">
+                            NIST: {action.nist_function}
+                          </span>
+
+                          <span className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[8px] text-gray-600">
+                            CIS: {action.cis_control}
+                          </span>
+
+                          <span className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-2.5 py-1.5 text-[8px] text-gray-600">
+                            Effort: {action.effort_estimate}
+                          </span>
+                        </div>
+                      </div>
+
+                      <ArrowUpRight className="hidden h-4 w-4 shrink-0 text-gray-700 sm:block" />
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </section>
+
+          {/* ==================================================
+              FRAMEWORK CARDS
+              ================================================== */}
+
+          <section className="mt-8 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-400/10 bg-emerald-500/[0.08]">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                </div>
 
                 <div>
-
-                  <p className="text-[11px] font-medium text-gray-200">
+                  <p className="text-sm font-medium text-gray-200">
                     NIST CSF 2.0
                   </p>
 
-                  <p className="text-[8px] text-gray-600">
+                  <p className="text-[10px] text-gray-600">
                     Framework-aligned assessment
                   </p>
-
                 </div>
-
               </div>
 
-
-              <div className="flex items-center gap-2 text-[8px] text-emerald-400/70">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-
+              <div className="flex items-center gap-2 text-xs text-emerald-400/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 Controls referenced in your findings
-
               </div>
-
             </div>
 
-
             <div className="rounded-2xl border border-blue-400/[0.08] bg-blue-500/[0.025] p-5">
-
-              <div className="flex items-center gap-3 mb-4">
-
-                <div className="w-9 h-9 rounded-xl bg-blue-500/[0.08] border border-blue-400/10 flex items-center justify-center">
-
-                  <Lock className="w-4 h-4 text-blue-400" />
-
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-400/10 bg-blue-500/[0.08]">
+                  <Shield className="h-4 w-4 text-blue-400" />
                 </div>
 
-
                 <div>
-
-                  <p className="text-[11px] font-medium text-gray-200">
+                  <p className="text-sm font-medium text-gray-200">
                     CIS Controls v8
                   </p>
 
-                  <p className="text-[8px] text-gray-600">
-                    Security controls referenced
+                  <p className="text-[10px] text-gray-600">
+                    Control recommendations mapped
                   </p>
-
                 </div>
-
               </div>
 
-
-              <div className="flex items-center gap-2 text-[8px] text-blue-400/70">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-
-                Recommendations mapped to controls
-
+              <div className="flex items-center gap-2 text-xs text-blue-400/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                Actionable control references
               </div>
-
             </div>
-
           </section>
 
+          {/* ==================================================
+              DISCLAIMER
+              ================================================== */}
 
-          {/* FOOTER */}
+          <div className="mt-8 rounded-2xl border border-amber-400/[0.08] bg-amber-500/[0.035] p-5">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 border-t border-white/[0.05]">
+              <div>
+                <p className="text-xs font-semibold text-amber-300">
+                  Assessment disclaimer
+                </p>
 
-            <div className="flex items-center gap-2 text-[8px] text-gray-700">
-
-              <Lock className="w-3 h-3 text-emerald-400" />
-
-              Assessment generated securely by CyberCISO AI.
-
+                <p className="mt-1.5 text-[11px] leading-5 text-amber-200/50">
+                  This assessment is based on self-reported
+                  information and should not replace a professional
+                  security audit. NIST CSF 2.0 and CIS Controls v8
+                  references are thematic; verify control numbers
+                  against official publications.
+                </p>
+              </div>
             </div>
-
-
-            <button
-              type="button"
-              onClick={
-                onRestart
-              }
-              className="flex items-center gap-2 text-[8px] text-gray-600 hover:text-violet-300 transition"
-            >
-
-              <RotateCcw className="w-3 h-3" />
-
-              Start another assessment
-
-              <ChevronRight className="w-3 h-3" />
-
-            </button>
-
           </div>
-
         </main>
 
+        {/* ==================================================
+            FOOTER
+            ================================================== */}
+
+        <footer className="mt-10 border-t border-white/[0.06] py-8">
+          <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-5 sm:flex-row">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-blue-500">
+                <Shield className="h-3 w-3 text-white" />
+              </div>
+
+              <span className="text-xs text-gray-600">
+                CyberCISO
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 text-[9px] text-gray-700">
+              <span>NIST CSF 2.0</span>
+              <span>•</span>
+              <span>CIS Controls v8</span>
+              <span>•</span>
+              <span>Virtual CISO</span>
+            </div>
+          </div>
+        </footer>
       </div>
-
     </div>
-
   );
 }
