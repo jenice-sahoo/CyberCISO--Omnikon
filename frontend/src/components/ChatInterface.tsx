@@ -13,20 +13,17 @@ import {
   Shield,
   ArrowLeft,
   CheckCircle2,
-  Sparkles,
   Activity,
   BarChart3,
-  ShieldCheck,
+  Lock,
   Database,
   Network,
   Mail,
   Siren,
-  Lock,
-  Plus,
-  Search,
-  MoreHorizontal,
-  ChevronRight,
-  Circle,
+  Users,
+  Sparkles,
+  Zap,
+  CircleDot,
   RotateCcw,
 } from 'lucide-react';
 
@@ -39,7 +36,9 @@ import {
   ScorecardResponse,
 } from '@/types';
 
-import { sendChatMessage } from '@/lib/api';
+import {
+  sendChatMessage,
+} from '@/lib/api';
 
 import {
   cn,
@@ -47,7 +46,9 @@ import {
   generateSessionId,
 } from '@/lib/utils';
 
-import { exportScorecardToPDF } from '@/lib/pdf';
+import {
+  exportScorecardToPDF,
+} from '@/lib/pdf';
 
 import ScorecardView from './ScorecardView';
 
@@ -74,31 +75,35 @@ const FIRST_QUESTIONS: Record<Vertical, string> = {
 
 const SECURITY_DOMAINS = [
   {
-    id: 'access',
+    key: 'access',
     label: 'Access Control',
     short: 'Access',
-    icon: ShieldCheck,
+    icon: Shield,
   },
+
   {
-    id: 'backup',
+    key: 'backup',
     label: 'Data Backup',
     short: 'Backup',
     icon: Database,
   },
+
   {
-    id: 'network',
+    key: 'network',
     label: 'Network Security',
     short: 'Network',
     icon: Network,
   },
+
   {
-    id: 'phishing',
+    key: 'phishing',
     label: 'Email & Phishing',
     short: 'Phishing',
     icon: Mail,
   },
+
   {
-    id: 'incident',
+    key: 'incident',
     label: 'Incident Response',
     short: 'Incident',
     icon: Siren,
@@ -107,7 +112,7 @@ const SECURITY_DOMAINS = [
 
 
 /* ============================================================
-   CLEAN AI RESPONSE
+   HELPERS
    ============================================================ */
 
 function stripMarkdown(text: string): string {
@@ -154,9 +159,11 @@ function playNotificationSound() {
     const ctx = new AudioContext();
 
     const osc = ctx.createOscillator();
+
     const gain = ctx.createGain();
 
     osc.connect(gain);
+
     gain.connect(ctx.destination);
 
     osc.type = 'sine';
@@ -172,7 +179,7 @@ function playNotificationSound() {
     );
 
     gain.gain.setValueAtTime(
-      0.06,
+      0.05,
       ctx.currentTime
     );
 
@@ -182,73 +189,12 @@ function playNotificationSound() {
     );
 
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.3);
+
+    osc.stop(
+      ctx.currentTime + 0.3
+    );
 
   } catch {}
-}
-
-
-/* ============================================================
-   CYBERCISO ORB
-   ============================================================ */
-
-function CyberOrb({
-  small = false,
-}: {
-  small?: boolean;
-}) {
-
-  return (
-    <div
-      className={cn(
-        'relative flex items-center justify-center',
-        small
-          ? 'w-9 h-9'
-          : 'w-24 h-24'
-      )}
-    >
-
-      <div
-        className={cn(
-          'absolute inset-0 rounded-full bg-violet-600/30 blur-2xl',
-          small && 'blur-lg'
-        )}
-      />
-
-      <div
-        className={cn(
-          'absolute inset-[8%] rounded-full bg-gradient-to-br from-violet-400 via-purple-600 to-blue-700 shadow-[0_0_45px_rgba(139,92,246,0.45)]',
-          small && 'shadow-[0_0_20px_rgba(139,92,246,0.35)]'
-        )}
-      />
-
-      <div
-        className={cn(
-          'absolute inset-[17%] rounded-full bg-[#0c0a16] border border-white/10 flex items-center justify-center',
-          small && 'inset-[18%]'
-        )}
-      >
-
-        <Shield
-          className={cn(
-            'text-violet-200',
-            small
-              ? 'w-4 h-4'
-              : 'w-9 h-9'
-          )}
-        />
-
-      </div>
-
-      {!small && (
-        <>
-          <div className="absolute w-2 h-2 rounded-full bg-white/80 top-2 right-6 blur-[1px]" />
-          <div className="absolute w-1.5 h-1.5 rounded-full bg-violet-200 bottom-5 left-3" />
-        </>
-      )}
-
-    </div>
-  );
 }
 
 
@@ -257,13 +203,17 @@ function CyberOrb({
    ============================================================ */
 
 function TypingIndicator() {
-
   return (
-    <div className="flex gap-3 items-start">
+    <div className="flex items-start gap-3 message-enter">
 
-      <CyberOrb small />
+      <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
 
-      <div className="rounded-2xl rounded-tl-md border border-white/[0.08] bg-white/[0.045] px-5 py-4">
+        <Shield className="w-4 h-4 text-white" />
+
+      </div>
+
+
+      <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.035] px-5 py-4">
 
         <div className="flex items-center gap-1.5">
 
@@ -283,7 +233,7 @@ function TypingIndicator() {
 
 
 /* ============================================================
-   BUSINESS PICKER
+   VERTICAL PICKER
    ============================================================ */
 
 function VerticalPicker({
@@ -292,75 +242,49 @@ function VerticalPicker({
   onSelect: (v: Vertical) => void;
 }) {
 
-  const businesses = [
-    {
-      id: 'retail' as Vertical,
-      label: 'Retail',
-      description:
-        'POS systems, inventory, payment networks',
-      icon: '🛍️',
-    },
-
-    {
-      id: 'healthcare_clinic' as Vertical,
-      label: 'Healthcare Clinic',
-      description:
-        'EHR systems, PHI, medical devices',
-      icon: '🏥',
-    },
-
-    {
-      id: 'professional_services' as Vertical,
-      label: 'Professional Services',
-      description:
-        'Client data, cloud applications, IP',
-      icon: '💼',
-    },
-  ];
-
   return (
-
     <div className="min-h-screen bg-[#05040b] text-white relative overflow-hidden">
 
-      <div className="absolute inset-0 pointer-events-none">
+      <div className="fixed inset-0 pointer-events-none">
 
-        <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-[650px] h-[400px] rounded-full bg-violet-600/15 blur-[150px]" />
+        <div className="absolute top-[-180px] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-violet-700/[0.12] blur-[180px]" />
 
-        <div className="absolute bottom-[-100px] left-[-100px] w-[350px] h-[350px] rounded-full bg-blue-600/10 blur-[130px]" />
+        <div className="absolute bottom-[-200px] right-[-150px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.08] blur-[160px]" />
 
       </div>
 
+
       <div
-        className="absolute inset-0 opacity-[0.035] pointer-events-none"
+        className="fixed inset-0 opacity-[0.035] pointer-events-none"
         style={{
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)',
+            'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
         }}
       />
 
+
       <div className="relative z-10 min-h-screen flex flex-col">
 
-        <header className="h-16 border-b border-white/[0.06] bg-[#08070e]/70 backdrop-blur-xl">
+        <header className="px-6 py-5 border-b border-white/[0.06]">
 
-          <div className="max-w-6xl mx-auto h-full px-5 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
 
             <Link
               href="/"
-              className="flex items-center gap-2.5 text-gray-500 hover:text-white transition"
+              className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm"
             >
 
               <ArrowLeft className="w-4 h-4" />
 
-              <span className="text-sm">
-                Back
-              </span>
+              Back
 
             </Link>
 
-            <div className="flex items-center gap-2 text-xs text-gray-500">
 
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.7)]" />
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
 
               Secure & Private
 
@@ -371,72 +295,102 @@ function VerticalPicker({
         </header>
 
 
-        <main className="flex-1 flex items-center justify-center px-5 py-14">
+        <main className="flex-1 flex items-center justify-center px-6 py-16">
 
           <div className="max-w-4xl w-full">
 
             <div className="text-center mb-12">
 
-              <div className="flex justify-center mb-6">
-                <CyberOrb />
-              </div>
+              <div className="flex justify-center mb-5">
 
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-400/20 bg-violet-500/[0.07] text-violet-300 text-xs mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-xl shadow-violet-500/20">
 
-                <Sparkles className="w-3.5 h-3.5" />
+                  <Shield className="w-6 h-6 text-white" />
 
-                AI Security Assessment
+                </div>
 
               </div>
 
-              <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">
+
+              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
 
                 Select your business
+                <span className="text-violet-400">
+                  .
+                </span>
 
               </h1>
 
+
               <p className="text-gray-500 mt-4 max-w-xl mx-auto leading-relaxed">
 
-                CyberCISO will tailor your assessment
-                to your industry's risks.
+                We'll tailor the security assessment to your industry's specific risks and requirements.
 
               </p>
 
             </div>
 
 
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
 
-              {businesses.map(
+              {[
+                {
+                  id: 'retail' as Vertical,
+                  label: 'Retail',
+                  desc: 'POS systems, inventory management, payment networks and staff access.',
+                  icon: '🛍️',
+                },
+
+                {
+                  id: 'healthcare_clinic' as Vertical,
+                  label: 'Healthcare Clinic',
+                  desc: 'EHR systems, patient data, HIPAA compliance and device security.',
+                  icon: '🏥',
+                },
+
+                {
+                  id: 'professional_services' as Vertical,
+                  label: 'Professional Services',
+                  desc: 'Client data, cloud applications, IP protection and secure communications.',
+                  icon: '💼',
+                },
+
+              ].map(
                 ({
                   id,
                   label,
-                  description,
+                  desc,
                   icon,
                 }) => (
 
                   <button
                     key={id}
-                    onClick={() => onSelect(id)}
-                    className="group text-left rounded-2xl border border-white/[0.08] bg-white/[0.025] p-6 hover:bg-white/[0.05] hover:border-violet-400/30 hover:-translate-y-1 transition-all duration-300"
+                    onClick={() =>
+                      onSelect(id)
+                    }
+                    className="group text-left p-6 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-violet-500/[0.06] hover:border-violet-400/20 transition-all"
                   >
 
                     <div className="text-3xl mb-5">
                       {icon}
                     </div>
 
-                    <div className="flex items-center justify-between">
 
-                      <h3 className="font-semibold text-gray-200 group-hover:text-white">
+                    <div className="flex items-center justify-between mb-2">
+
+                      <span className="font-semibold text-gray-200 group-hover:text-white">
                         {label}
-                      </h3>
+                      </span>
 
-                      <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-violet-400 group-hover:translate-x-1 transition" />
+                      <ArrowLeft
+                        className="w-4 h-4 rotate-180 text-gray-700 group-hover:text-violet-400 transition-all"
+                      />
 
                     </div>
 
-                    <p className="text-sm text-gray-500 mt-3 leading-relaxed">
-                      {description}
+
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      {desc}
                     </p>
 
                   </button>
@@ -447,26 +401,38 @@ function VerticalPicker({
             </div>
 
 
-            <div className="flex justify-center gap-6 mt-9 text-xs text-gray-600">
+            <div className="flex items-center justify-center gap-5 mt-10 text-[10px] text-gray-700">
 
-              <span>
+              <span className="flex items-center gap-1.5">
+
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
                 NIST CSF 2.0
+
               </span>
+
 
               <span>
                 •
               </span>
 
-              <span>
+
+              <span className="flex items-center gap-1.5">
+
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
                 CIS Controls v8
+
               </span>
+
 
               <span>
                 •
               </span>
 
+
               <span>
-                Adaptive Assessment
+                ~10 minutes
               </span>
 
             </div>
@@ -483,295 +449,17 @@ function VerticalPicker({
 
 
 /* ============================================================
-   DASHBOARD STAT CARD
-   ============================================================ */
-
-function StatCard({
-  label,
-  value,
-  description,
-  icon: Icon,
-  accent = 'violet',
-}: {
-  label: string;
-  value: string;
-  description: string;
-  icon: any;
-  accent?: 'violet' | 'blue' | 'green';
-}) {
-
-  const accents = {
-    violet: 'text-violet-300 bg-violet-500/10 border-violet-400/10',
-    blue: 'text-blue-300 bg-blue-500/10 border-blue-400/10',
-    green: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/10',
-  };
-
-  return (
-
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
-
-      <div className="flex items-center justify-between">
-
-        <div>
-
-          <p className="text-[10px] uppercase tracking-[0.16em] text-gray-600">
-            {label}
-          </p>
-
-          <p className="text-2xl font-semibold text-white mt-1">
-            {value}
-          </p>
-
-          <p className="text-[11px] text-gray-600 mt-1">
-            {description}
-          </p>
-
-        </div>
-
-        <div
-          className={cn(
-            'w-9 h-9 rounded-xl border flex items-center justify-center',
-            accents[accent]
-          )}
-        >
-
-          <Icon className="w-4 h-4" />
-
-        </div>
-
-      </div>
-
-    </div>
-  );
-}
-
-
-/* ============================================================
-   DOMAIN COVERAGE
-   ============================================================ */
-
-function DomainCoverage({
-  answered,
-}: {
-  answered: number;
-}) {
-
-  const levels = [
-    Math.min(100, answered >= 1 ? 82 : 18),
-    Math.min(100, answered >= 2 ? 64 : 8),
-    Math.min(100, answered >= 3 ? 55 : 5),
-    Math.min(100, answered >= 4 ? 48 : 4),
-    Math.min(100, answered >= 5 ? 40 : 3),
-  ];
-
-  return (
-
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
-
-      <div className="flex items-center justify-between mb-5">
-
-        <div>
-
-          <p className="text-sm font-medium text-gray-200">
-            Security coverage
-          </p>
-
-          <p className="text-[11px] text-gray-600 mt-1">
-            Live assessment areas
-          </p>
-
-        </div>
-
-        <BarChart3 className="w-4 h-4 text-violet-400" />
-
-      </div>
-
-
-      <div className="space-y-4">
-
-        {SECURITY_DOMAINS.map(
-          (domain, index) => {
-
-            const Icon = domain.icon;
-
-            return (
-
-              <div key={domain.id}>
-
-                <div className="flex items-center justify-between mb-1.5">
-
-                  <div className="flex items-center gap-2">
-
-                    <Icon className="w-3.5 h-3.5 text-gray-600" />
-
-                    <span className="text-xs text-gray-400">
-                      {domain.short}
-                    </span>
-
-                  </div>
-
-                  <span className="text-[10px] text-gray-600">
-                    {answered > index
-                      ? 'reviewed'
-                      : 'pending'}
-                  </span>
-
-                </div>
-
-
-                <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
-
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-400 transition-all duration-700"
-                    style={{
-                      width: `${levels[index]}%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-            );
-          }
-        )}
-
-      </div>
-
-    </div>
-  );
-}
-
-
-/* ============================================================
-   ASSESSMENT ACTIVITY
-   ============================================================ */
-
-function AssessmentActivity({
-  answered,
-}: {
-  answered: number;
-}) {
-
-  const states = [
-    answered >= 1 ? 'complete' : 'active',
-    answered >= 2 ? 'complete' : answered === 1 ? 'active' : 'pending',
-    answered >= 3 ? 'complete' : answered === 2 ? 'active' : 'pending',
-    answered >= 4 ? 'complete' : answered === 3 ? 'active' : 'pending',
-    answered >= 5 ? 'complete' : answered === 4 ? 'active' : 'pending',
-  ];
-
-  return (
-
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
-
-      <div className="flex items-center justify-between mb-5">
-
-        <div>
-
-          <p className="text-sm font-medium text-gray-200">
-            Assessment activity
-          </p>
-
-          <p className="text-[11px] text-gray-600 mt-1">
-            Security areas being reviewed
-          </p>
-
-        </div>
-
-        <Activity className="w-4 h-4 text-violet-400" />
-
-      </div>
-
-
-      <div className="space-y-4">
-
-        {SECURITY_DOMAINS.map(
-          (domain, index) => {
-
-            const state = states[index];
-
-            return (
-
-              <div
-                key={domain.id}
-                className="flex items-center gap-3"
-              >
-
-                <div className="relative flex flex-col items-center">
-
-                  <div
-                    className={cn(
-                      'w-2.5 h-2.5 rounded-full border',
-                      state === 'complete'
-                        ? 'bg-emerald-400 border-emerald-300 shadow-[0_0_8px_rgba(52,211,153,.5)]'
-                        : state === 'active'
-                        ? 'bg-violet-400 border-violet-200 shadow-[0_0_10px_rgba(167,139,250,.7)]'
-                        : 'bg-transparent border-gray-700'
-                    )}
-                  />
-
-                  {index <
-                    SECURITY_DOMAINS.length - 1 && (
-                    <div className="absolute top-3 w-px h-5 bg-white/[0.06]" />
-                  )}
-
-                </div>
-
-
-                <div className="flex-1 flex items-center justify-between">
-
-                  <span
-                    className={cn(
-                      'text-xs',
-                      state === 'pending'
-                        ? 'text-gray-600'
-                        : 'text-gray-400'
-                    )}
-                  >
-                    {domain.label}
-                  </span>
-
-                  <span
-                    className={cn(
-                      'text-[10px]',
-                      state === 'complete'
-                        ? 'text-emerald-400'
-                        : state === 'active'
-                        ? 'text-violet-400'
-                        : 'text-gray-700'
-                    )}
-                  >
-                    {state === 'complete'
-                      ? 'completed'
-                      : state === 'active'
-                      ? 'analyzing'
-                      : 'pending'}
-                  </span>
-
-                </div>
-
-              </div>
-
-            );
-          }
-        )}
-
-      </div>
-
-    </div>
-  );
-}
-
-
-/* ============================================================
-   CHAT INTERFACE
+   MAIN PROPS
    ============================================================ */
 
 interface ChatInterfaceProps {
   initialVertical?: Vertical;
 }
 
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
 
 export default function ChatInterface({
   initialVertical,
@@ -795,55 +483,103 @@ export default function ChatInterface({
     );
 
   const [scorecard, setScorecard] =
-    useState<ScorecardResponse | null>(null);
+    useState<ScorecardResponse | null>(
+      null
+    );
 
   const [interviewComplete, setInterviewComplete] =
     useState(false);
 
   const [sessionId] =
-    useState(() => generateSessionId());
+    useState(() =>
+      generateSessionId()
+    );
 
   const prevMsgCountRef =
     useRef(0);
-
-  const messagesEndRef =
-    useRef<HTMLDivElement>(null);
 
   const inputRef =
     useRef<HTMLTextAreaElement>(null);
 
 
-  /* ============================================================
-     AUTO SCROLL
-     ============================================================ */
+  /* ==========================================================
+     INITIALIZE ASSESSMENT
+     ========================================================== */
+
+  const handleVerticalSelect = useCallback(
+    (selectedVertical: Vertical) => {
+
+      setVertical(
+        selectedVertical
+      );
+
+      const name =
+        formatVertical(
+          selectedVertical
+        );
+
+      const welcomeMsg =
+        `Sure! Here is your ${name} assessment.`;
+
+      const firstQuestion =
+        FIRST_QUESTIONS[
+          selectedVertical
+        ];
+
+      setMessages([
+        {
+          role: 'user',
+          content:
+            `I want an assessment for ${name}`,
+        },
+
+        {
+          role: 'assistant',
+          content:
+            welcomeMsg,
+        },
+
+        {
+          role: 'assistant',
+          content:
+            firstQuestion,
+        },
+      ]);
+
+    },
+    []
+  );
+
+
+  /* ==========================================================
+     AUTO INITIALIZE FROM HOMEPAGE
+     ========================================================== */
 
   useEffect(() => {
 
-    messagesEndRef.current?.scrollIntoView({
-      behavior: 'smooth',
-    });
+    if (
+      initialVertical &&
+      messages.length === 0 &&
+      !interviewComplete
+    ) {
+
+      handleVerticalSelect(
+        initialVertical
+      );
+
+    }
 
   }, [
-    messages,
-    scorecard,
+    initialVertical,
+    messages.length,
     interviewComplete,
+    handleVerticalSelect,
   ]);
 
 
-  /* ============================================================
-     AUTO FOCUS
-     ============================================================ */
-
-  useEffect(() => {
-
-    inputRef.current?.focus();
-
-  }, [messages]);
-
-
-  /* ============================================================
-     AI SOUND
-     ============================================================ */
+  /* ==========================================================
+     MESSAGE SOUND
+     ========================================================== */
 
   useEffect(() => {
 
@@ -852,11 +588,14 @@ export default function ChatInterface({
       prevMsgCountRef.current
     ) {
 
-      const last =
-        messages[messages.length - 1];
+      const lastMsg =
+        messages[
+          messages.length - 1
+        ];
 
       if (
-        last?.role === 'assistant'
+        lastMsg?.role ===
+        'assistant'
       ) {
 
         playNotificationSound();
@@ -871,9 +610,29 @@ export default function ChatInterface({
   }, [messages]);
 
 
-  /* ============================================================
-     SEND MESSAGE
-     ============================================================ */
+  /* ==========================================================
+     FOCUS INPUT
+     ========================================================== */
+
+  useEffect(() => {
+
+    if (!interviewComplete) {
+
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+
+    }
+
+  }, [
+    messages,
+    interviewComplete,
+  ]);
+
+
+  /* ==========================================================
+     SUBMIT MESSAGE
+     ========================================================== */
 
   const handleSubmit = async (
     e: React.FormEvent
@@ -892,6 +651,7 @@ export default function ChatInterface({
     const userMessage =
       input.trim();
 
+
     setInput('');
 
     setError(null);
@@ -901,6 +661,7 @@ export default function ChatInterface({
 
     const newMessages = [
       ...messages,
+
       {
         role: 'user' as const,
         content: userMessage,
@@ -941,9 +702,11 @@ export default function ChatInterface({
         response.scorecard;
 
 
-      /* --------------------------------------------------------
-         FALLBACK SCORECARD PARSING
-         -------------------------------------------------------- */
+      /*
+       * FALLBACK:
+       * Parse scorecard if backend
+       * returned it as JSON text.
+       */
 
       if (
         !sc &&
@@ -1000,9 +763,9 @@ export default function ChatInterface({
       }
 
 
-      /* --------------------------------------------------------
-         SCORECARD
-         -------------------------------------------------------- */
+      /* ======================================================
+         SCORECARD RECEIVED
+         ====================================================== */
 
       if (sc) {
 
@@ -1018,15 +781,17 @@ export default function ChatInterface({
 
       }
 
-      /* --------------------------------------------------------
-         NORMAL RESPONSE
-         -------------------------------------------------------- */
+
+      /* ======================================================
+         NORMAL CHAT RESPONSE
+         ====================================================== */
 
       else {
 
         setMessages(
           prev => [
             ...prev,
+
             {
               role: 'assistant',
               content:
@@ -1039,7 +804,9 @@ export default function ChatInterface({
 
       }
 
-    } catch (err) {
+    }
+
+    catch (err) {
 
       setError(
         err instanceof Error
@@ -1050,10 +817,15 @@ export default function ChatInterface({
 
       setMessages(
         prev =>
-          prev.slice(0, -1)
+          prev.slice(
+            0,
+            -1
+          )
       );
 
-    } finally {
+    }
+
+    finally {
 
       setIsLoading(false);
 
@@ -1062,93 +834,9 @@ export default function ChatInterface({
   };
 
 
-  /* ============================================================
-     SELECT BUSINESS
-     ============================================================ */
-
-  const handleVerticalSelect =
-    useCallback(
-      (
-        selectedVertical: Vertical
-      ) => {
-
-        setVertical(
-          selectedVertical
-        );
-
-
-        const name =
-          formatVertical(
-            selectedVertical
-          );
-
-
-        const welcomeMsg =
-          `Sure! Here is your ${name} assessment.`;
-
-
-        const firstQuestion =
-          FIRST_QUESTIONS[
-            selectedVertical
-          ];
-
-
-        setMessages([
-
-          {
-            role: 'user',
-            content:
-              `I want an assessment for ${name}`,
-          },
-
-          {
-            role: 'assistant',
-            content:
-              welcomeMsg,
-          },
-
-          {
-            role: 'assistant',
-            content:
-              firstQuestion,
-          },
-
-        ]);
-
-      },
-      []
-    );
-
-
-  /* ============================================================
-     INITIALIZE FROM HOMEPAGE
-     ============================================================ */
-
-  useEffect(() => {
-
-    if (
-      initialVertical &&
-      messages.length === 0 &&
-      !interviewComplete
-    ) {
-
-      handleVerticalSelect(
-        initialVertical
-      );
-
-    }
-
-  }, [
-    initialVertical,
-    messages.length,
-    interviewComplete,
-    handleVerticalSelect,
-  ]);
-
-
-  /* ============================================================
-     RESTART
-     ============================================================ */
+  /* ==========================================================
+     NEW ASSESSMENT
+     ========================================================== */
 
   const handleRestart = () => {
 
@@ -1158,9 +846,9 @@ export default function ChatInterface({
   };
 
 
-  /* ============================================================
-     PDF
-     ============================================================ */
+  /* ==========================================================
+     DOWNLOAD PDF
+     ========================================================== */
 
   const handleDownloadPDF =
     async () => {
@@ -1186,9 +874,9 @@ export default function ChatInterface({
     };
 
 
-  /* ============================================================
-     DIRECT /ASSESS PICKER
-     ============================================================ */
+  /* ==========================================================
+     VERTICAL PICKER
+     ========================================================== */
 
   if (
     !vertical &&
@@ -1206,9 +894,9 @@ export default function ChatInterface({
   }
 
 
-  /* ============================================================
-     FINAL SCORECARD
-     ============================================================ */
+  /* ==========================================================
+     SCORECARD
+     ========================================================== */
 
   if (
     interviewComplete &&
@@ -1216,7 +904,6 @@ export default function ChatInterface({
   ) {
 
     return (
-
       <div className="min-h-screen bg-[#05040b]">
 
         <ScorecardView
@@ -1232,52 +919,60 @@ export default function ChatInterface({
         />
 
       </div>
-
     );
 
   }
 
 
-  /* ============================================================
-     LIVE ASSESSMENT
-     ============================================================ */
+  /* ==========================================================
+     ASSESSMENT CALCULATIONS
+     ========================================================== */
 
   const userMessages =
     messages.filter(
-      message =>
-        message.role === 'user'
-    ).length;
+      msg =>
+        msg.role ===
+        'user'
+    );
+
 
   /*
-   * The first user message is generated by CyberCISO
-   * when the assessment starts, so don't count it as
-   * a real answered question.
+   * The first user message is simply:
+   * "I want an assessment for..."
+   *
+   * So it should NOT count as an answered
+   * assessment question.
    */
+
   const answeredQuestions =
     Math.max(
       0,
-      userMessages - 1
+      userMessages.length - 1
     );
 
-  /*
-   * The backend describes the assessment as roughly
-   * 8–12 adaptive questions. We therefore show a
-   * visual estimate rather than pretending we know
-   * the exact final number.
-   */
+
+  const estimatedQuestions = 10;
+
+
   const progress =
     Math.min(
-      92,
-      Math.max(
-        8,
-        answeredQuestions * 10
+      100,
+      Math.round(
+        (answeredQuestions /
+          estimatedQuestions) *
+          100
       )
     );
 
 
+  /* ==========================================================
+     MAIN ASSESSMENT UI
+     ========================================================== */
+
   return (
 
-    <div className="min-h-screen bg-[#05040b] text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#05040b] text-white relative">
+
 
       {/* ======================================================
           BACKGROUND
@@ -1285,19 +980,21 @@ export default function ChatInterface({
 
       <div className="fixed inset-0 pointer-events-none">
 
-        <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[850px] h-[500px] rounded-full bg-violet-700/[0.10] blur-[170px]" />
+        <div className="absolute top-[-220px] left-[35%] w-[700px] h-[500px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
 
-        <div className="absolute bottom-[-180px] left-[-100px] w-[450px] h-[450px] rounded-full bg-blue-700/[0.07] blur-[160px]" />
+        <div className="absolute top-[45%] right-[-200px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.05] blur-[170px]" />
 
-        <div className="absolute top-[35%] right-[-150px] w-[400px] h-[400px] rounded-full bg-fuchsia-700/[0.06] blur-[150px]" />
+        <div className="absolute bottom-[-200px] left-[10%] w-[500px] h-[400px] rounded-full bg-fuchsia-700/[0.04] blur-[170px]" />
 
       </div>
 
 
-      {/* GRID */}
+      {/* ======================================================
+          GRID
+          ====================================================== */}
 
       <div
-        className="fixed inset-0 pointer-events-none opacity-[0.035]"
+        className="fixed inset-0 opacity-[0.028] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
@@ -1307,34 +1004,50 @@ export default function ChatInterface({
       />
 
 
-      <div className="relative z-10 min-h-screen flex">
+      {/* ======================================================
+          PAGE
+          ====================================================== */
+
+      <div className="relative z-10 flex min-h-screen">
 
 
         {/* ====================================================
-            SIDEBAR — NEBULA INSPIRED
+            LEFT SIDEBAR
             ==================================================== */}
 
-        <aside className="hidden lg:flex w-[245px] flex-shrink-0 border-r border-white/[0.06] bg-[#08070e]/70 backdrop-blur-xl flex-col">
+        <aside className="hidden lg:flex w-60 flex-shrink-0 border-r border-white/[0.06] bg-[#07060d]/90 flex-col sticky top-0 h-screen">
 
-          {/* LOGO */}
 
-          <div className="px-5 py-5">
+          {/* BRAND */}
+
+          <div className="px-5 py-5 border-b border-white/[0.06]">
 
             <Link
               href="/"
               className="flex items-center gap-3"
             >
 
-              <CyberOrb small />
+              <div className="relative">
+
+                <div className="absolute inset-0 bg-violet-500/20 blur-xl rounded-full" />
+
+                <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
+
+                  <Shield className="w-4 h-4 text-white" />
+
+                </div>
+
+              </div>
+
 
               <div>
 
-                <div className="font-semibold text-sm text-white">
+                <div className="text-sm font-semibold text-white">
                   CyberCISO
                 </div>
 
-                <div className="text-[9px] tracking-[0.18em] uppercase text-gray-600">
-                  AI Security Advisor
+                <div className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                  AI security advisor
                 </div>
 
               </div>
@@ -1346,85 +1059,71 @@ export default function ChatInterface({
 
           {/* NEW ASSESSMENT */}
 
-          <div className="px-3">
+          <div className="px-4 py-4">
 
-            <button
-              onClick={handleRestart}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-violet-500/[0.10] border border-violet-400/10 hover:bg-violet-500/[0.16] transition"
+            <Link
+              href="/"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-violet-400/10 bg-violet-500/[0.07] text-violet-300 text-xs hover:bg-violet-500/[0.12] transition"
             >
 
-              <Plus className="w-4 h-4 text-violet-300" />
+              <Sparkles className="w-3.5 h-3.5" />
 
-              <span className="text-xs text-violet-200">
-                New Assessment
-              </span>
+              New Assessment
 
-            </button>
+            </Link>
 
           </div>
 
 
           {/* NAV */}
 
-          <div className="px-3 mt-5">
+          <div className="px-3">
 
-            <div className="px-3 mb-2 text-[9px] uppercase tracking-[0.18em] text-gray-700">
+            <p className="px-3 mb-2 text-[8px] uppercase tracking-[0.2em] text-gray-700">
               Assessment
-            </div>
+            </p>
 
 
-            <div className="space-y-1">
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/[0.045] text-gray-200">
 
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.04] text-gray-300">
+              <Activity className="w-3.5 h-3.5 text-violet-400" />
 
-                <Activity className="w-3.5 h-3.5 text-violet-400" />
-
-                <span className="text-xs">
-                  Live assessment
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600">
-
-                <BarChart3 className="w-3.5 h-3.5" />
-
-                <span className="text-xs">
-                  Security posture
-                </span>
-
-              </div>
+              <span className="text-xs">
+                Live assessment
+              </span>
 
             </div>
 
           </div>
 
 
-          {/* CURRENT ASSESSMENT */}
+          {/* CURRENT */}
 
-          <div className="px-3 mt-7 flex-1">
+          <div className="px-4 mt-6">
 
-            <div className="px-3 mb-2 text-[9px] uppercase tracking-[0.18em] text-gray-700">
+            <p className="px-2 mb-2 text-[8px] uppercase tracking-[0.2em] text-gray-700">
               Current
-            </div>
+            </p>
 
 
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
 
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2">
 
                 <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.7)]" />
 
-                <span className="text-xs text-gray-300 truncate">
+                <span className="text-xs text-gray-300">
                   {vertical
-                    ? formatVertical(vertical)
-                    : 'Security Assessment'}
+                    ? formatVertical(
+                        vertical
+                      )
+                    : 'Assessment'}
                 </span>
 
               </div>
 
-              <p className="text-[10px] text-gray-700">
+
+              <p className="text-[9px] text-gray-700 mt-1.5 ml-3.5">
                 Assessment in progress
               </p>
 
@@ -1433,29 +1132,26 @@ export default function ChatInterface({
           </div>
 
 
-          {/* SIDEBAR FOOTER */}
+          {/* BOTTOM */}
 
-          <div className="p-4 border-t border-white/[0.06]">
+          <div className="mt-auto p-4">
 
-            <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-3">
 
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/40 to-blue-500/30 border border-white/10 flex items-center justify-center">
+              <div className="flex items-center gap-2">
 
-                <Shield className="w-3.5 h-3.5 text-violet-300" />
+                <Lock className="w-3.5 h-3.5 text-emerald-400" />
 
-              </div>
-
-              <div>
-
-                <p className="text-xs text-gray-400">
+                <span className="text-[9px] text-gray-500">
                   Secure session
-                </p>
-
-                <p className="text-[10px] text-emerald-500/70">
-                  ● Protected locally
-                </p>
+                </span>
 
               </div>
+
+
+              <p className="text-[8px] text-emerald-400/60 mt-1 ml-5">
+                Protected locally
+              </p>
 
             </div>
 
@@ -1465,51 +1161,39 @@ export default function ChatInterface({
 
 
         {/* ====================================================
-            MAIN
+            MAIN CONTENT
             ==================================================== */}
 
-        <main className="flex-1 min-w-0 flex flex-col">
+        <main className="flex-1 min-w-0">
 
 
           {/* ==================================================
               TOP HEADER
               ================================================== */}
 
-          <header className="h-16 flex-shrink-0 border-b border-white/[0.06] bg-[#08070e]/65 backdrop-blur-xl">
+          <header className="sticky top-0 z-30 h-16 border-b border-white/[0.06] bg-[#07060d]/85 backdrop-blur-xl">
 
-            <div className="h-full px-5 flex items-center justify-between">
+            <div className="h-full px-5 lg:px-7 flex items-center justify-between">
+
 
               <div className="flex items-center gap-3">
 
-                <Link
-                  href="/"
-                  className="lg:hidden text-gray-600 hover:text-white"
-                >
+                <div className="lg:hidden w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
 
-                  <ArrowLeft className="w-4 h-4" />
+                  <Shield className="w-4 h-4 text-white" />
 
-                </Link>
+                </div>
 
 
                 <div>
 
-                  <div className="flex items-center gap-2">
-
-                    <h1 className="text-sm font-medium text-gray-200">
-                      {vertical
-                        ? formatVertical(vertical)
-                        : 'Security Assessment'}
-                    </h1>
-
-                    <span className="px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-400/10 text-[9px] text-violet-300">
-                      AI AUDIT
-                    </span>
-
-                  </div>
-
-                  <p className="text-[10px] text-gray-600 mt-0.5">
-                    Adaptive security interview
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-gray-600">
+                    Security operations
                   </p>
+
+                  <h1 className="text-sm font-semibold text-gray-200">
+                    Assessment overview
+                  </h1>
 
                 </div>
 
@@ -1518,31 +1202,27 @@ export default function ChatInterface({
 
               <div className="flex items-center gap-3">
 
-                <div className="hidden sm:flex items-center gap-2 text-[10px] text-gray-600">
 
-                  <Lock className="w-3 h-3" />
+                {vertical && (
 
-                  Session protected
+                  <span className="hidden sm:block px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[10px] text-violet-300">
 
-                </div>
+                    {formatVertical(
+                      vertical
+                    )}
 
-
-                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-full border border-emerald-400/10 bg-emerald-500/[0.05]">
-
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,.7)] animate-pulse" />
-
-                  <span className="text-[10px] text-emerald-400/80">
-                    Active
                   </span>
 
+                )}
+
+
+                <div className="flex items-center gap-2 text-[10px] text-gray-600">
+
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.8)]" />
+
+                  CyberCISO AI is analyzing
+
                 </div>
-
-
-                <button className="w-8 h-8 rounded-lg border border-white/[0.06] bg-white/[0.025] flex items-center justify-center text-gray-600 hover:text-gray-300 transition">
-
-                  <MoreHorizontal className="w-4 h-4" />
-
-                </button>
 
               </div>
 
@@ -1552,42 +1232,49 @@ export default function ChatInterface({
 
 
           {/* ==================================================
-              CONTENT
+              PAGE CONTENT
+
+              IMPORTANT:
+              NO overflow-y-auto HERE.
+              The entire browser page scrolls.
               ================================================== */}
 
-          <div className="flex-1 overflow-y-auto">
-
-            <div className="max-w-[1450px] mx-auto px-4 sm:px-6 py-6">
+          <div className="px-4 sm:px-6 lg:px-7 py-6 max-w-[1500px] mx-auto">
 
 
-              {/* =================================================
-                  TITLE
-                  ================================================= */}
+            {/* =================================================
+                STAT CARDS
+                ================================================= */}
 
-              <div className="mb-5">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+
+
+              {/* QUESTIONS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
 
                 <div className="flex items-center justify-between">
 
                   <div>
 
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/70 mb-2">
-                      Security Operations
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Questions
                     </p>
 
-                    <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
-                      Assessment overview
-                    </h2>
+                    <p className="text-xl font-semibold text-gray-200 mt-1">
+                      {answeredQuestions}
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      answered
+                    </p>
 
                   </div>
 
 
-                  <div className="hidden md:flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
 
-                    <div className="w-2 h-2 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,.7)]" />
-
-                    <span className="text-xs text-gray-500">
-                      CyberCISO AI is analyzing
-                    </span>
+                    <Zap className="w-3.5 h-3.5 text-violet-400" />
 
                   </div>
 
@@ -1596,156 +1283,558 @@ export default function ChatInterface({
               </div>
 
 
-              {/* =================================================
-                  STAT CARDS
-                  ================================================= */}
+              {/* PROGRESS */}
 
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
 
-                <StatCard
-                  label="Questions"
-                  value={String(
-                    answeredQuestions
-                  )}
-                  description="answered"
-                  icon={Activity}
-                />
+                <div className="flex items-center justify-between">
 
-                <StatCard
-                  label="Progress"
-                  value={`${progress}%`}
-                  description="assessment progress"
-                  icon={BarChart3}
-                  accent="blue"
-                />
+                  <div>
 
-                <StatCard
-                  label="Domains"
-                  value="5"
-                  description="security areas"
-                  icon={ShieldCheck}
-                />
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Progress
+                    </p>
 
-                <StatCard
-                  label="Frameworks"
-                  value="NIST + CIS"
-                  description="active controls"
-                  icon={Lock}
-                  accent="green"
-                />
+                    <p className="text-xl font-semibold text-gray-200 mt-1">
+                      {progress}%
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      assessment progress
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/[0.08] border border-blue-400/10 flex items-center justify-center">
+
+                    <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
+
+                  </div>
+
+                </div>
 
               </div>
 
 
+              {/* DOMAINS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Domains
+                    </p>
+
+                    <p className="text-xl font-semibold text-gray-200 mt-1">
+                      5
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      security areas
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/[0.08] border border-fuchsia-400/10 flex items-center justify-center">
+
+                    <CircleDot className="w-3.5 h-3.5 text-fuchsia-400" />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* FRAMEWORKS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Frameworks
+                    </p>
+
+                    <p className="text-sm font-semibold text-gray-200 mt-2">
+                      NIST + CIS
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      active controls
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/[0.08] border border-emerald-400/10 flex items-center justify-center">
+
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* =================================================
+                MAIN GRID
+                ================================================= */}
+
+            <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-4">
+
+
               {/* =================================================
-                  MAIN DASHBOARD GRID
+                  CHAT
                   ================================================= */}
 
-              <div className="grid xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,.8fr)] gap-4">
+              <section className="rounded-2xl border border-white/[0.08] bg-[#090811]/90 overflow-hidden">
+
+
+                {/* CHAT HEADER */}
+
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+
+                  <div className="flex items-center gap-3">
+
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+
+                      <Shield className="w-4 h-4 text-white" />
+
+                    </div>
+
+
+                    <div>
+
+                      <p className="text-xs font-semibold text-gray-200">
+                        CyberCISO AI
+                      </p>
+
+                      <p className="text-[8px] text-gray-600">
+                        Online • Security analyst
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  <div className="flex items-center gap-2">
+
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+
+                    <span className="text-[9px] text-gray-600">
+                      Live
+                    </span>
+
+                  </div>
+
+                </div>
 
 
                 {/* =================================================
-                    CHAT PANEL
+                    MESSAGES
+
+                    NO overflow-y-auto.
+                    NO fixed height.
+                    NO internal scrollbar.
+
+                    The browser/page handles scrolling.
                     ================================================= */}
 
-                <section className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/80 overflow-hidden flex flex-col min-h-[590px]">
+                <div className="px-5 py-6 space-y-5">
 
-                  {/* CHAT HEADER */}
 
-                  <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                  {messages.map(
+                    (
+                      msg,
+                      idx
+                    ) => (
 
-                    <div className="flex items-center gap-3">
+                      <div
+                        key={idx}
+                        className={cn(
+                          'flex gap-3 message-enter',
+                          msg.role ===
+                            'user' &&
+                            'justify-end'
+                        )}
+                      >
 
-                      <CyberOrb small />
 
-                      <div>
+                        {/* AI ICON */}
 
-                        <p className="text-sm font-medium text-gray-200">
-                          CyberCISO AI
-                        </p>
+                        {msg.role ===
+                          'assistant' && (
 
-                        <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-md shadow-violet-500/20 mt-0.5">
 
-                          <span className="text-[10px] text-emerald-400/70">
-                            Online
-                          </span>
+                            <Shield className="w-4 h-4 text-white" />
 
-                          <span className="w-1 h-1 rounded-full bg-gray-700" />
+                          </div>
 
-                          <span className="text-[10px] text-gray-600">
-                            Security analyst
-                          </span>
+                        )}
+
+
+                        {/* MESSAGE */}
+
+                        <div
+                          className={cn(
+                            'max-w-[85%] rounded-2xl px-4 py-3',
+                            msg.role ===
+                              'user'
+
+                              ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white rounded-br-md shadow-lg shadow-violet-500/10'
+
+                              : 'bg-white/[0.035] text-gray-300 border border-white/[0.07] rounded-bl-md'
+                          )}
+                        >
+
+                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+
+                            {msg.content}
+
+                          </p>
 
                         </div>
 
                       </div>
 
+                    )
+                  )}
+
+
+                  {/* TYPING */}
+
+                  {isLoading && (
+                    <TypingIndicator />
+                  )}
+
+
+                  {/* ERROR */}
+
+                  {error && (
+
+                    <div className="flex justify-center">
+
+                      <div className="px-4 py-3 rounded-xl border border-red-400/10 bg-red-500/[0.05] text-red-300 text-xs">
+
+                        {error}
+
+                      </div>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+
+                {/* =================================================
+                    INPUT
+
+                    This is NOT a scroll container.
+                    ================================================= */}
+
+                <div className="px-5 pb-5">
+
+                  <form
+                    onSubmit={
+                      handleSubmit
+                    }
+                    className="rounded-xl border border-violet-400/10 bg-[#0d0b16] p-2.5 focus-within:border-violet-400/20 transition"
+                  >
+
+                    <div className="flex items-end gap-2">
+
+                      <textarea
+                        ref={
+                          inputRef
+                        }
+                        value={
+                          input
+                        }
+                        onChange={
+                          e =>
+                            setInput(
+                              e.target.value
+                            )
+                        }
+                        onKeyDown={(
+                          e: KeyboardEvent<HTMLTextAreaElement>
+                        ) => {
+
+                          if (
+                            e.key ===
+                              'Enter' &&
+                            !e.shiftKey
+                          ) {
+
+                            e.preventDefault();
+
+                            handleSubmit(
+                              e
+                            );
+
+                          }
+
+                        }}
+                        placeholder="Tell CyberCISO about your security..."
+                        disabled={
+                          isLoading
+                        }
+                        rows={1}
+                        className="flex-1 min-h-[44px] max-h-32 bg-transparent px-3 py-3 text-sm text-gray-200 placeholder:text-gray-700 focus:outline-none resize-none"
+                        aria-label="Chat input"
+                      />
+
+
+                      <button
+                        type="submit"
+                        disabled={
+                          !input.trim() ||
+                          isLoading
+                        }
+                        className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0',
+
+                          input.trim() &&
+                            !isLoading
+
+                            ? 'bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-lg shadow-violet-500/20 hover:scale-[1.03]'
+
+                            : 'bg-white/[0.04] text-gray-700 cursor-not-allowed'
+                        )}
+                        aria-label="Send message"
+                      >
+
+                        <Send className="w-4 h-4" />
+
+                      </button>
+
                     </div>
 
 
-                    <button className="w-8 h-8 rounded-lg border border-white/[0.06] flex items-center justify-center text-gray-600 hover:text-gray-300">
+                    <div className="flex items-center justify-between px-3 pb-1 pt-1">
 
-                      <Search className="w-3.5 h-3.5" />
+                      <span className="text-[8px] text-gray-700">
+                        Enter to send • Shift+Enter for new line
+                      </span>
 
-                    </button>
+
+                      <span className="flex items-center gap-1.5 text-[8px] text-gray-700">
+
+                        <Lock className="w-2.5 h-2.5" />
+
+                        Session protected
+
+                      </span>
+
+                    </div>
+
+                  </form>
+
+                </div>
+
+              </section>
+
+
+              {/* =================================================
+                  RIGHT SIDEBAR
+                  ================================================= */}
+
+              <aside className="space-y-4">
+
+
+                {/* =================================================
+                    PROGRESS
+                    ================================================= */}
+
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
+
+                  <div className="flex items-center justify-between mb-1">
+
+                    <p className="text-xs font-medium text-gray-300">
+                      Assessment progress
+                    </p>
+
+                    <span className="text-xs font-semibold text-violet-300">
+                      {progress}%
+                    </span>
 
                   </div>
 
 
-                  {/* MESSAGES */}
+                  <p className="text-[8px] text-gray-700 mb-3">
+                    Adaptive interview
+                  </p>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
 
-                    {messages.map(
-                      (msg, idx) => {
+                  <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
 
-                        const isUser =
-                          msg.role === 'user';
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                      style={{
+                        width:
+                          `${Math.max(
+                            progress,
+                            3
+                          )}%`,
+                      }}
+                    />
+
+                  </div>
+
+
+                  <div className="flex justify-between mt-2 text-[8px] text-gray-700">
+
+                    <span>
+                      {answeredQuestions} answered
+                    </span>
+
+                    <span>
+                      adaptive
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    SECURITY COVERAGE
+                    ================================================= */}
+
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
+
+                  <div className="flex items-center justify-between mb-1">
+
+                    <p className="text-xs font-medium text-gray-300">
+                      Security coverage
+                    </p>
+
+                    <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+
+                  </div>
+
+
+                  <p className="text-[8px] text-gray-700 mb-4">
+                    Live assessment areas
+                  </p>
+
+
+                  <div className="space-y-3">
+
+                    {SECURITY_DOMAINS.map(
+                      (
+                        domain,
+                        index
+                      ) => {
+
+                        const Icon =
+                          domain.icon;
+
+
+                        /*
+                         * First domain becomes active
+                         * after the assessment begins.
+                         *
+                         * Later domains unlock as
+                         * questions progress.
+                         */
+
+                        const domainProgress =
+                          Math.min(
+                            100,
+                            Math.max(
+                              3,
+                              progress -
+                                index *
+                                  18
+                            )
+                          );
+
+
+                        const active =
+                          progress >=
+                          index *
+                            18;
+
 
                         return (
 
                           <div
-                            key={idx}
-                            className={cn(
-                              'flex gap-3 message-enter',
-                              isUser
-                                ? 'justify-end'
-                                : 'justify-start'
-                            )}
+                            key={
+                              domain.key
+                            }
                           >
 
-                            {!isUser && (
-                              <CyberOrb small />
-                            )}
+                            <div className="flex items-center justify-between mb-1">
+
+                              <div className="flex items-center gap-2">
+
+                                <Icon
+                                  className={cn(
+                                    'w-3 h-3',
+                                    active
+                                      ? 'text-violet-400'
+                                      : 'text-gray-700'
+                                  )}
+                                />
+
+                                <span
+                                  className={cn(
+                                    'text-[9px]',
+                                    active
+                                      ? 'text-gray-400'
+                                      : 'text-gray-700'
+                                  )}
+                                >
+                                  {
+                                    domain.short
+                                  }
+                                </span>
+
+                              </div>
 
 
-                            <div
-                              className={cn(
+                              <span
+                                className={cn(
+                                  'text-[8px]',
+                                  active
+                                    ? 'text-violet-400/70'
+                                    : 'text-gray-800'
+                                )}
+                              >
 
-                                'max-w-[78%] px-4 py-3.5 rounded-2xl text-sm leading-relaxed',
+                                {active
+                                  ? `${domainProgress}%`
+                                  : 'pending'}
 
-                                isUser
+                              </span>
 
-                                  ? 'rounded-br-md bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-lg shadow-violet-950/30'
+                            </div>
 
-                                  : 'rounded-tl-md bg-white/[0.045] border border-white/[0.07] text-gray-300'
 
-                              )}
-                            >
+                            <div className="h-1 rounded-full bg-white/[0.04] overflow-hidden">
 
-                              {!isUser && (
-                                <div className="flex items-center gap-2 mb-2">
-
-                                  <span className="text-[9px] uppercase tracking-[0.14em] text-violet-400">
-                                    CyberCISO
-                                  </span>
-
-                                </div>
-                              )}
-
-                              <p className="whitespace-pre-wrap">
-                                {msg.content}
-                              </p>
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                                style={{
+                                  width:
+                                    `${domainProgress}%`,
+                                }}
+                              />
 
                             </div>
 
@@ -1756,348 +1845,204 @@ export default function ChatInterface({
                       }
                     )}
 
-
-                    {isLoading && (
-                      <TypingIndicator />
-                    )}
-
-
-                    {error && (
-
-                      <div className="flex justify-center">
-
-                        <div className="px-4 py-3 rounded-xl border border-red-400/10 bg-red-500/[0.06] text-red-300 text-xs">
-                          {error}
-                        </div>
-
-                      </div>
-
-                    )}
-
-
-                    <div ref={messagesEndRef} />
-
                   </div>
-
-
-                  {/* CHAT INPUT */}
-
-                  <div className="p-4 border-t border-white/[0.06]">
-
-                    <form
-                      onSubmit={
-                        handleSubmit
-                      }
-                    >
-
-                      <div className="relative">
-
-                        <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-violet-600/30 via-fuchsia-500/20 to-blue-500/30 blur-sm" />
-
-
-                        <div className="relative rounded-2xl border border-white/[0.09] bg-[#11101a]">
-
-                          <textarea
-                            ref={inputRef}
-                            value={input}
-                            onChange={
-                              e =>
-                                setInput(
-                                  e.target.value
-                                )
-                            }
-                            onKeyDown={(
-                              e: KeyboardEvent<HTMLTextAreaElement>
-                            ) => {
-
-                              if (
-                                e.key ===
-                                  'Enter' &&
-                                !e.shiftKey
-                              ) {
-
-                                e.preventDefault();
-
-                                handleSubmit(
-                                  e
-                                );
-
-                              }
-
-                            }}
-                            disabled={
-                              isLoading
-                            }
-                            rows={2}
-                            placeholder="Tell CyberCISO about your security..."
-                            className="w-full resize-none bg-transparent outline-none px-4 pt-4 pb-12 text-sm text-gray-200 placeholder:text-gray-700"
-                          />
-
-
-                          <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
-
-                            <div className="flex items-center gap-1">
-
-                              <button
-                                type="button"
-                                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/[0.04] transition"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-
-                              <span className="text-[9px] text-gray-700 hidden sm:block">
-                                Shift + Enter for new line
-                              </span>
-
-                            </div>
-
-
-                            <button
-                              type="submit"
-                              disabled={
-                                !input.trim() ||
-                                isLoading
-                              }
-                              className={cn(
-                                'w-8 h-8 rounded-lg flex items-center justify-center transition-all',
-
-                                input.trim() &&
-                                !isLoading
-
-                                  ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-900/30 hover:scale-105'
-
-                                  : 'bg-white/[0.04] text-gray-700 cursor-not-allowed'
-                              )}
-                            >
-
-                              <Send className="w-3.5 h-3.5" />
-
-                            </button>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    </form>
-
-                  </div>
-
-                </section>
-
-
-                {/* =================================================
-                    RIGHT DASHBOARD
-                    ================================================= */}
-
-                <div className="space-y-4">
-
-
-                  {/* PROGRESS CARD */}
-
-                  <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
-
-                    <div className="flex items-center justify-between mb-4">
-
-                      <div>
-
-                        <p className="text-sm font-medium text-gray-200">
-                          Assessment progress
-                        </p>
-
-                        <p className="text-[11px] text-gray-600 mt-1">
-                          Adaptive interview
-                        </p>
-
-                      </div>
-
-                      <span className="text-xl font-semibold text-white">
-                        {progress}%
-                      </span>
-
-                    </div>
-
-
-                    <div className="h-2 rounded-full bg-white/[0.05] overflow-hidden mb-4">
-
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-blue-500 transition-all duration-700"
-                        style={{
-                          width: `${progress}%`,
-                        }}
-                      />
-
-                    </div>
-
-
-                    <div className="flex justify-between text-[10px] text-gray-600">
-
-                      <span>
-                        {answeredQuestions} answered
-                      </span>
-
-                      <span>
-                        adaptive
-                      </span>
-
-                    </div>
-
-                  </div>
-
-
-                  {/* SECURITY COVERAGE */}
-
-                  <DomainCoverage
-                    answered={
-                      answeredQuestions
-                    }
-                  />
-
-
-                  {/* ACTIVITY */}
-
-                  <AssessmentActivity
-                    answered={
-                      answeredQuestions
-                    }
-                  />
-
-
-                  {/* FRAMEWORKS */}
-
-                  <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
-
-                    <div className="flex items-center gap-2 mb-4">
-
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-
-                      <div>
-
-                        <p className="text-sm text-gray-200">
-                          Framework coverage
-                        </p>
-
-                        <p className="text-[10px] text-gray-600">
-                          Assessment standards
-                        </p>
-
-                      </div>
-
-                    </div>
-
-
-                    <div className="space-y-2">
-
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.025] border border-white/[0.04]">
-
-                        <span className="text-xs text-gray-400">
-                          NIST CSF 2.0
-                        </span>
-
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-
-                      </div>
-
-
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.025] border border-white/[0.04]">
-
-                        <span className="text-xs text-gray-400">
-                          CIS Controls v8
-                        </span>
-
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
 
                 </div>
 
-              </div>
 
+                {/* =================================================
+                    ASSESSMENT ACTIVITY
+                    ================================================= */}
 
-              {/* =================================================
-                  BOTTOM SECURITY SIGNAL STRIP
-                  ================================================= */}
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
-              <div className="grid sm:grid-cols-3 gap-3 mt-4">
+                  <div className="flex items-center justify-between mb-1">
 
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 flex items-center gap-3">
-
-                  <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-400/10 flex items-center justify-center">
+                    <p className="text-xs font-medium text-gray-300">
+                      Assessment activity
+                    </p>
 
                     <Activity className="w-3.5 h-3.5 text-violet-400" />
 
                   </div>
 
-                  <div>
 
-                    <p className="text-[10px] text-gray-600 uppercase tracking-wider">
-                      AI status
-                    </p>
+                  <p className="text-[8px] text-gray-700 mb-4">
+                    Security areas being reviewed
+                  </p>
 
-                    <p className="text-xs text-gray-300 mt-0.5">
-                      Adaptive analysis active
-                    </p>
+
+                  <div className="space-y-3">
+
+                    {SECURITY_DOMAINS.map(
+                      (
+                        domain,
+                        index
+                      ) => {
+
+                        const active =
+                          index ===
+                          Math.min(
+                            4,
+                            Math.floor(
+                              answeredQuestions /
+                                2
+                            )
+                          );
+
+
+                        return (
+
+                          <div
+                            key={
+                              domain.key
+                            }
+                            className="flex items-center justify-between"
+                          >
+
+                            <div className="flex items-center gap-2">
+
+                              <span
+                                className={cn(
+                                  'w-1.5 h-1.5 rounded-full border',
+                                  active
+                                    ? 'bg-violet-400 border-violet-300 shadow-[0_0_6px_rgba(167,139,250,.8)]'
+                                    : 'border-gray-700'
+                                )}
+                              />
+
+                              <span
+                                className={cn(
+                                  'text-[9px]',
+                                  active
+                                    ? 'text-gray-300'
+                                    : 'text-gray-700'
+                                )}
+                              >
+                                {
+                                  domain.label
+                                }
+                              </span>
+
+                            </div>
+
+
+                            <span
+                              className={cn(
+                                'text-[8px]',
+                                active
+                                  ? 'text-violet-400/70'
+                                  : 'text-gray-800'
+                              )}
+                            >
+
+                              {active
+                                ? 'active'
+                                : 'pending'}
+
+                            </span>
+
+                          </div>
+
+                        );
+
+                      }
+                    )}
 
                   </div>
 
                 </div>
 
 
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 flex items-center gap-3">
+                {/* =================================================
+                    NO FRAMEWORK COVERAGE CARD HERE
+                    ================================================= */}
 
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-400/10 flex items-center justify-center">
+              </aside>
 
-                    <Lock className="w-3.5 h-3.5 text-blue-400" />
+            </div>
 
-                  </div>
 
-                  <div>
+            {/* =================================================
+                BOTTOM STATUS
+                ================================================= */}
 
-                    <p className="text-[10px] text-gray-600 uppercase tracking-wider">
-                      Privacy
-                    </p>
+            <div className="grid md:grid-cols-3 gap-3 mt-4">
 
-                    <p className="text-xs text-gray-300 mt-0.5">
-                      Session data protected
-                    </p>
 
-                  </div>
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+
+                <div className="w-7 h-7 rounded-lg bg-violet-500/[0.07] flex items-center justify-center">
+
+                  <Sparkles className="w-3 h-3 text-violet-400" />
 
                 </div>
 
 
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 flex items-center gap-3">
+                <div>
 
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-400/10 flex items-center justify-center">
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                    AI status
+                  </p>
 
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-
-                  </div>
-
-                  <div>
-
-                    <p className="text-[10px] text-gray-600 uppercase tracking-wider">
-                      Standards
-                    </p>
-
-                    <p className="text-xs text-gray-300 mt-0.5">
-                      NIST + CIS aligned
-                    </p>
-
-                  </div>
+                  <p className="text-[9px] text-gray-500">
+                    Adaptive analysis active
+                  </p>
 
                 </div>
 
               </div>
 
 
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+
+                <div className="w-7 h-7 rounded-lg bg-blue-500/[0.07] flex items-center justify-center">
+
+                  <Lock className="w-3 h-3 text-blue-400" />
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                    Privacy
+                  </p>
+
+                  <p className="text-[9px] text-gray-500">
+                    Session data protected
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/[0.07] flex items-center justify-center">
+
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                    Standards
+                  </p>
+
+                  <p className="text-[9px] text-gray-500">
+                    NIST + CIS aligned
+                  </p>
+
+                </div>
+
+              </div>
+
             </div>
+
 
           </div>
 
