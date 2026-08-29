@@ -174,33 +174,6 @@ async def chat(req: ChatRequest):
             ]
 
             previous_questions_lower = {q.lower() for q in previous_questions}
-
-            if content.strip().lower() in previous_questions_lower:
-                excluded = "\n".join(f"- {q}" for q in previous_questions)
-
-                retry_msgs = msgs + [{
-                    "role": "system",
-                    "content": (
-                        "The question you generated has already been asked. "
-                        "You MUST generate a different question. "
-                        "Do not repeat or rephrase any of these previous questions:\n"
-                        f"{excluded}\n"
-                        "Output ONLY one new short cybersecurity question."
-                    )
-                }]
-
-                retry_kwargs = {
-                    "model": model_name,
-                    "messages": retry_msgs,
-                    "max_tokens": 128,
-                    "temperature": 0.2
-                }
-
-            if model_name.startswith("qwen/"):
-                retry_kwargs["reasoning_format"] = "hidden"
-
-            retry_res = await client.chat.completions.create(**retry_kwargs)
-            content = (retry_res.choices[0].message.content or "").strip()
             # Robustly strip reasoning / CoT blocks from various models (Groq Llama, Gemma, Qwen, DeepSeek)
             # Covers: <think>...</think>, <thinking>...</thinking>, <thought>...</thought>, "thinking"/"response" delimiters
             import re
@@ -223,6 +196,30 @@ async def chat(req: ChatRequest):
             if _last:
                 content = "\n".join(_frac[_last:]).strip()
             content = content.strip()
+            # Check for duplicate question after cleaning
+            if content.lower() in previous_questions_lower:
+                retry_msgs = msgs + [{
+                    "role": "system",
+                    "content": (
+                        "You already asked this question. "
+                        "Generate a completely different cybersecurity question. "
+                        "Do not repeat or rephrase any previous question. "
+                        "Output ONLY one short question."
+                    )
+                }]
+
+                retry_kwargs = {
+                    "model": model_name,
+                    "messages": retry_msgs,
+                    "max_tokens": 128,
+                    "temperature": 0.4
+                }
+
+                if model_name.startswith("qwen/"):
+                    retry_kwargs["reasoning_format"] = "hidden"
+
+                retry_res = await client.chat.completions.create(**retry_kwargs)
+                content = (retry_res.choices[0].message.content or "").strip()
             # try scorecard parse
             import json
             raw = content
@@ -243,9 +240,17 @@ async def chat(req: ChatRequest):
     # Mock flow - no Groq or Groq failed
     v = vertical.value
     qs = MOCK_QUESTIONS.get(v, MOCK_QUESTIONS["retail"])
-    # next question index = user_turns (1-indexed after answering)
-    idx = min(user_turns, len(qs)-1)
-    # if user just answered question idx-1, ask idx
-    return ChatResponse(response=qs[idx], interview_complete=False)
+    # If all mock questions have been answered, finish the assessment
+    if user_turns >= len(qs):
+        return ChatResponse(
+            response="",
+            scorecard=mock_scorecard(vertical),
+            interview_complete=True
+        )
 
-# Vercel deployment test
+    # Ask the next question
+    idx = user_turns
+        return ChatResponse(
+        response=qs[idx],
+        interview_complete=False
+    )
