@@ -1,0 +1,36 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+
+[[env]]
+name = "OPENAI_API_KEY"
+value = "${OPENAI_API_KEY}"
+
+[[env]]
+name = "OPENAI_MODEL"
+value = "gpt-4o-mini"
+
+[[env]]
+name = "OPENAI_MAX_TOKENS"
+value = "4096"
+
+[[env]]
+name = "TOKEN_THRESHOLD"
+value = "3000"
+
+[[env]]
+name = "TARGET_TOKEN_BUDGET"
+value = "2000"
+
+[[env]]
+name = "FRONTEND_URL"
+value = "https://cyber-ciso-omnikon-22ru.vercel.app"
+
+[[env]]
+name = "ENVIRONMENT"
+value = "production"

@@ -1,0 +1,35 @@
+{
+  "name": "CyberCISO",
+  "short_name": "CyberCISO",
+  "description": "Virtual CISO for Small Business - Security assessment and remediation plan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0ea5e9",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "security", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Start Assessment",
+      "short_name": "Assess",
+      "description": "Begin a new security assessment",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

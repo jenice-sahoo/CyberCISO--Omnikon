@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0284c7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0369a1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#38bdf8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="56" fill="url(#shieldGradient)" opacity="0.1"/>
+  
+  <!-- Shield shape -->
+  <path d="M60 10 L100 25 L100 70 C100 95 60 105 60 105 C60 105 20 95 20 70 L20 25 Z" 
+        fill="url(#shieldGradient)" 
+        stroke="url(#accentGradient)" 
+        stroke-width="2"
+        filter="url(#glow)"/>
+  
+  <!-- Inner shield highlight -->
+  <path d="M60 20 L90 32 L90 65 C90 82 60 88 60 88 C60 88 30 82 30 65 L30 32 Z" 
+        fill="none" 
+        stroke="#38bdf8" 
+        stroke-width="1.5" 
+        opacity="0.6"/>
+  
+  <!-- Lock icon -->
+  <g transform="translate(60, 50)">
+    <!-- Lock body -->
+    <rect x="-14" y="4" width="28" height="20" rx="3" fill="#0ea5e9" opacity="0.9"/>
+    <!-- Lock shackle -->
+    <path d="M-10 4 C-10 -4 10 -4 10 4" 
+          fill="none" 
+          stroke="#38bdf8" 
+          stroke-width="4" 
+          stroke-linecap="round"/>
+    <!-- Keyhole -->
+    <circle cx="0" cy="14" r="3" fill="#0c4a6e"/>
+    <rect x="-1.5" y="14" width="3" height="6" fill="#0c4a6e" rx="1"/>
+  </g>
+  
+  <!-- Circuit pattern accents -->
+  <g stroke="#38bdf8" stroke-width="1" opacity="0.4" fill="none">
+    <path d="M35 85 L45 85 L45 75"/>
+    <path d="M75 85 L85 85 L85 75"/>
+    <circle cx="40" cy="90" r="2" fill="#38bdf8" opacity="0.6"/>
+    <circle cx="80" cy="90" r="2" fill="#38bdf8" opacity="0.6"/>
+  </g>
+  
+  <!-- CyberCISO text -->
+  <text x="60" y="112" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#0ea5e9" letter-spacing="1">CYBERCISO</text>
+</svg>

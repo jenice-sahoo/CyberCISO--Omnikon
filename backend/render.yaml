@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: cyberciso-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_MAX_TOKENS
+        value: "4096"
+      - key: TOKEN_THRESHOLD
+        value: "3000"
+      - key: TARGET_TOKEN_BUDGET
+        value: "2000"
+      - key: FRONTEND_URL
+        value: https://cyber-ciso-omnikon-22ru.vercel.app
+      - key: ENVIRONMENT
+        value: production
+    healthCheckPath: /health
