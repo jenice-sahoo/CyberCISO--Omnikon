@@ -1,60 +1,58 @@
 'use client';
 
 import {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
+  FormEvent,
   KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
 } from 'react';
-
-import {
-  Send,
-  Shield,
-  ArrowLeft,
-  CheckCircle2,
-  Activity,
-  BarChart3,
-  Lock,
-  Database,
-  Network,
-  Mail,
-  Siren,
-  Users,
-  Sparkles,
-  Zap,
-  CircleDot,
-  RotateCcw,
-} from 'lucide-react';
 
 import Link from 'next/link';
 
 import {
-  ChatMessage,
-  ChatRequest,
-  Vertical,
-  ScorecardResponse,
-} from '@/types';
+  Activity,
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  Database,
+  LayoutDashboard,
+  Lock,
+  Mail,
+  Network,
+  RotateCcw,
+  Send,
+  Settings,
+  Shield,
+  Siren,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 
 import {
-  sendChatMessage,
-} from '@/lib/api';
+  ChatMessage,
+  ChatRequest,
+  ScorecardResponse,
+  Vertical,
+} from '@/types';
+
+import { sendChatMessage } from '@/lib/api';
 
 import {
   cn,
+  formatCategory,
   formatVertical,
   generateSessionId,
 } from '@/lib/utils';
 
-import {
-  exportScorecardToPDF,
-} from '@/lib/pdf';
+import { exportScorecardToPDF } from '@/lib/pdf';
 
 import ScorecardView from './ScorecardView';
 
 
 /* ============================================================
-   FIRST QUESTIONS
+   QUESTIONS
    ============================================================ */
 
 const FIRST_QUESTIONS: Record<Vertical, string> = {
@@ -80,28 +78,24 @@ const SECURITY_DOMAINS = [
     short: 'Access',
     icon: Shield,
   },
-
   {
     key: 'backup',
     label: 'Data Backup',
     short: 'Backup',
     icon: Database,
   },
-
   {
     key: 'network',
     label: 'Network Security',
     short: 'Network',
     icon: Network,
   },
-
   {
     key: 'phishing',
     label: 'Email & Phishing',
     short: 'Phishing',
     icon: Mail,
   },
-
   {
     key: 'incident',
     label: 'Incident Response',
@@ -112,89 +106,53 @@ const SECURITY_DOMAINS = [
 
 
 /* ============================================================
-   HELPERS
+   RESPONSE CLEANER
    ============================================================ */
 
-function stripMarkdown(text: string): string {
-  let out = text
+function cleanResponse(text: string): string {
+  let result = text
     .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
     .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, '')
     .replace(/<thought>[\s\S]*?<\/thought>\s*/gi, '')
     .replace(/<\/?(think|thinking|thought|answer)[^>]*>/gi, '');
 
-  const lines = out.split('\n');
+  const lines = result.split('\n');
 
-  let last = -1;
+  let responseMarker = -1;
 
   for (let i = 0; i < lines.length; i++) {
-    const t = lines[i].trim().toLowerCase();
-
-    if (t === 'response') {
-      last = i;
+    if (lines[i].trim().toLowerCase() === 'response') {
+      responseMarker = i;
     }
   }
 
-  if (last !== -1) {
-    out = lines.slice(last + 1).join('\n');
+  if (responseMarker !== -1) {
+    result = lines
+      .slice(responseMarker + 1)
+      .join('\n');
   }
 
-  return out
+  return result
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/__(.*?)__/g, '$1')
     .replace(/_(.*?)_/g, '$1')
     .replace(/`(.*?)`/g, '$1')
     .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^[-*+]\s+/gm, '')
     .trim();
 }
 
 
 /* ============================================================
-   NOTIFICATION SOUND
+   DUPLICATE RESPONSE CHECK
    ============================================================ */
 
-function playNotificationSound() {
-  try {
-    const ctx = new AudioContext();
-
-    const osc = ctx.createOscillator();
-
-    const gain = ctx.createGain();
-
-    osc.connect(gain);
-
-    gain.connect(ctx.destination);
-
-    osc.type = 'sine';
-
-    osc.frequency.setValueAtTime(
-      880,
-      ctx.currentTime
-    );
-
-    osc.frequency.exponentialRampToValueAtTime(
-      660,
-      ctx.currentTime + 0.15
-    );
-
-    gain.gain.setValueAtTime(
-      0.05,
-      ctx.currentTime
-    );
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.001,
-      ctx.currentTime + 0.3
-    );
-
-    osc.start(ctx.currentTime);
-
-    osc.stop(
-      ctx.currentTime + 0.3
-    );
-
-  } catch {}
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,!?;:]+/g, '')
+    .trim();
 }
 
 
@@ -204,24 +162,21 @@ function playNotificationSound() {
 
 function TypingIndicator() {
   return (
-    <div className="flex items-start gap-3 message-enter">
+    <div className="flex items-start gap-3">
 
-      <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-
+      <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
         <Shield className="w-4 h-4 text-white" />
-
       </div>
-
 
       <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.035] px-5 py-4">
 
         <div className="flex items-center gap-1.5">
 
-          <div className="typing-dot w-1.5 h-1.5 rounded-full bg-violet-400" />
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
 
-          <div className="typing-dot w-1.5 h-1.5 rounded-full bg-violet-400" />
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse [animation-delay:150ms]" />
 
-          <div className="typing-dot w-1.5 h-1.5 rounded-full bg-violet-400" />
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse [animation-delay:300ms]" />
 
         </div>
 
@@ -233,29 +188,51 @@ function TypingIndicator() {
 
 
 /* ============================================================
-   VERTICAL PICKER
+   BUSINESS SELECTOR
    ============================================================ */
 
-function VerticalPicker({
+function BusinessSelector({
   onSelect,
 }: {
-  onSelect: (v: Vertical) => void;
+  onSelect: (vertical: Vertical) => void;
 }) {
+  const businesses = [
+    {
+      id: 'retail' as Vertical,
+      title: 'Retail',
+      emoji: '🛍️',
+      description:
+        'POS systems, inventory, payment networks and staff access.',
+    },
+    {
+      id: 'healthcare_clinic' as Vertical,
+      title: 'Healthcare Clinic',
+      emoji: '🏥',
+      description:
+        'EHR systems, patient data, compliance and device security.',
+    },
+    {
+      id: 'professional_services' as Vertical,
+      title: 'Professional Services',
+      emoji: '💼',
+      description:
+        'Client data, cloud applications, IP and communications.',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[#05040b] text-white relative overflow-hidden">
 
-      <div className="fixed inset-0 pointer-events-none">
+      <div className="absolute inset-0 pointer-events-none">
 
-        <div className="absolute top-[-180px] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-violet-700/[0.12] blur-[180px]" />
+        <div className="absolute top-[-200px] left-1/2 -translate-x-1/2 w-[850px] h-[550px] rounded-full bg-violet-700/[0.12] blur-[180px]" />
 
-        <div className="absolute bottom-[-200px] right-[-150px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.08] blur-[160px]" />
+        <div className="absolute bottom-[-200px] right-[-100px] w-[500px] h-[500px] rounded-full bg-fuchsia-700/[0.06] blur-[160px]" />
 
       </div>
 
-
       <div
-        className="fixed inset-0 opacity-[0.035] pointer-events-none"
+        className="absolute inset-0 opacity-[0.035] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
@@ -263,28 +240,25 @@ function VerticalPicker({
         }}
       />
 
-
       <div className="relative z-10 min-h-screen flex flex-col">
 
-        <header className="px-6 py-5 border-b border-white/[0.06]">
+        <header className="border-b border-white/[0.06]">
 
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
 
             <Link
               href="/"
-              className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm"
+              className="flex items-center gap-2 text-gray-600 hover:text-white transition"
             >
-
               <ArrowLeft className="w-4 h-4" />
-
-              Back
-
+              <span className="text-xs">
+                Back
+              </span>
             </Link>
 
+            <div className="flex items-center gap-2 text-[10px] text-gray-600">
 
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
 
               Secure & Private
 
@@ -301,16 +275,17 @@ function VerticalPicker({
 
             <div className="text-center mb-12">
 
-              <div className="flex justify-center mb-5">
+              <div className="relative mx-auto w-14 h-14 mb-6">
 
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-xl shadow-violet-500/20">
+                <div className="absolute inset-0 rounded-2xl bg-violet-500/20 blur-xl" />
 
-                  <Shield className="w-6 h-6 text-white" />
+                <div className="relative w-full h-full rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+
+                  <Shield className="w-7 h-7 text-white" />
 
                 </div>
 
               </div>
-
 
               <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
 
@@ -321,7 +296,6 @@ function VerticalPicker({
 
               </h1>
 
-
               <p className="text-gray-500 mt-4 max-w-xl mx-auto leading-relaxed">
 
                 We'll tailor the security assessment to your industry's specific risks and requirements.
@@ -331,72 +305,42 @@ function VerticalPicker({
             </div>
 
 
-            <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
+            <div className="grid sm:grid-cols-3 gap-5">
 
-              {[
-                {
-                  id: 'retail' as Vertical,
-                  label: 'Retail',
-                  desc: 'POS systems, inventory management, payment networks and staff access.',
-                  icon: '🛍️',
-                },
+              {businesses.map((business) => (
 
-                {
-                  id: 'healthcare_clinic' as Vertical,
-                  label: 'Healthcare Clinic',
-                  desc: 'EHR systems, patient data, HIPAA compliance and device security.',
-                  icon: '🏥',
-                },
+                <button
+                  key={business.id}
+                  type="button"
+                  onClick={() =>
+                    onSelect(business.id)
+                  }
+                  className="group text-left p-6 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-violet-500/[0.06] hover:border-violet-400/20 hover:-translate-y-1 transition-all duration-200"
+                >
 
-                {
-                  id: 'professional_services' as Vertical,
-                  label: 'Professional Services',
-                  desc: 'Client data, cloud applications, IP protection and secure communications.',
-                  icon: '💼',
-                },
+                  <div className="text-3xl mb-6">
+                    {business.emoji}
+                  </div>
 
-              ].map(
-                ({
-                  id,
-                  label,
-                  desc,
-                  icon,
-                }) => (
+                  <div className="flex items-center justify-between">
 
-                  <button
-                    key={id}
-                    onClick={() =>
-                      onSelect(id)
-                    }
-                    className="group text-left p-6 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-violet-500/[0.06] hover:border-violet-400/20 transition-all"
-                  >
+                    <span className="font-semibold text-gray-200 group-hover:text-white">
+                      {business.title}
+                    </span>
 
-                    <div className="text-3xl mb-5">
-                      {icon}
-                    </div>
+                    <span className="text-gray-700 group-hover:text-violet-400 text-lg">
+                      →
+                    </span>
 
+                  </div>
 
-                    <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-600 leading-relaxed mt-3">
+                    {business.description}
+                  </p>
 
-                      <span className="font-semibold text-gray-200 group-hover:text-white">
-                        {label}
-                      </span>
+                </button>
 
-                      <ArrowLeft
-                        className="w-4 h-4 rotate-180 text-gray-700 group-hover:text-violet-400 transition-all"
-                      />
-
-                    </div>
-
-
-                    <p className="text-xs text-gray-600 leading-relaxed">
-                      {desc}
-                    </p>
-
-                  </button>
-
-                )
-              )}
+              ))}
 
             </div>
 
@@ -404,32 +348,18 @@ function VerticalPicker({
             <div className="flex items-center justify-center gap-5 mt-10 text-[10px] text-gray-700">
 
               <span className="flex items-center gap-1.5">
-
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-
                 NIST CSF 2.0
-
               </span>
 
-
-              <span>
-                •
-              </span>
-
+              <span>•</span>
 
               <span className="flex items-center gap-1.5">
-
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-
                 CIS Controls v8
-
               </span>
 
-
-              <span>
-                •
-              </span>
-
+              <span>•</span>
 
               <span>
                 ~10 minutes
@@ -449,7 +379,7 @@ function VerticalPicker({
 
 
 /* ============================================================
-   MAIN PROPS
+   PROPS
    ============================================================ */
 
 interface ChatInterfaceProps {
@@ -483,9 +413,7 @@ export default function ChatInterface({
     );
 
   const [scorecard, setScorecard] =
-    useState<ScorecardResponse | null>(
-      null
-    );
+    useState<ScorecardResponse | null>(null);
 
   const [interviewComplete, setInterviewComplete] =
     useState(false);
@@ -495,56 +423,53 @@ export default function ChatInterface({
       generateSessionId()
     );
 
-  const prevMsgCountRef =
-    useRef(0);
-
   const inputRef =
     useRef<HTMLTextAreaElement>(null);
 
 
   /* ==========================================================
-     INITIALIZE ASSESSMENT
+     START ASSESSMENT
      ========================================================== */
 
-  const handleVerticalSelect = useCallback(
+  const startAssessment = useCallback(
     (selectedVertical: Vertical) => {
+
+      const businessName =
+        formatVertical(
+          selectedVertical
+        );
 
       setVertical(
         selectedVertical
       );
 
-      const name =
-        formatVertical(
-          selectedVertical
-        );
-
-      const welcomeMsg =
-        `Sure! Here is your ${name} assessment.`;
-
-      const firstQuestion =
-        FIRST_QUESTIONS[
-          selectedVertical
-        ];
-
       setMessages([
         {
           role: 'user',
           content:
-            `I want an assessment for ${name}`,
+            `I want an assessment for ${businessName}`,
         },
 
         {
           role: 'assistant',
           content:
-            welcomeMsg,
+            `Sure! Here is your ${businessName} assessment.`,
         },
 
         {
           role: 'assistant',
           content:
-            firstQuestion,
+            FIRST_QUESTIONS[
+              selectedVertical
+            ],
         },
       ]);
+
+      setScorecard(null);
+
+      setInterviewComplete(false);
+
+      setError(null);
 
     },
     []
@@ -552,7 +477,7 @@ export default function ChatInterface({
 
 
   /* ==========================================================
-     AUTO INITIALIZE FROM HOMEPAGE
+     AUTO START FROM URL
      ========================================================== */
 
   useEffect(() => {
@@ -563,7 +488,7 @@ export default function ChatInterface({
       !interviewComplete
     ) {
 
-      handleVerticalSelect(
+      startAssessment(
         initialVertical
       );
 
@@ -573,54 +498,27 @@ export default function ChatInterface({
     initialVertical,
     messages.length,
     interviewComplete,
-    handleVerticalSelect,
+    startAssessment,
   ]);
 
 
   /* ==========================================================
-     MESSAGE SOUND
-     ========================================================== */
-
-  useEffect(() => {
-
-    if (
-      messages.length >
-      prevMsgCountRef.current
-    ) {
-
-      const lastMsg =
-        messages[
-          messages.length - 1
-        ];
-
-      if (
-        lastMsg?.role ===
-        'assistant'
-      ) {
-
-        playNotificationSound();
-
-      }
-
-    }
-
-    prevMsgCountRef.current =
-      messages.length;
-
-  }, [messages]);
-
-
-  /* ==========================================================
-     FOCUS INPUT
+     INPUT FOCUS
      ========================================================== */
 
   useEffect(() => {
 
     if (!interviewComplete) {
 
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+      const timer =
+        window.setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+
+      return () =>
+        window.clearTimeout(
+          timer
+        );
 
     }
 
@@ -631,223 +529,269 @@ export default function ChatInterface({
 
 
   /* ==========================================================
-     SUBMIT MESSAGE
+     SEND MESSAGE
      ========================================================== */
 
-  const handleSubmit = async (
-    e: React.FormEvent
-  ) => {
+  const handleSubmit =
+    async (
+      event?: FormEvent
+    ) => {
 
-    e.preventDefault();
-
-    if (
-      !input.trim() ||
-      isLoading
-    ) {
-      return;
-    }
-
-
-    const userMessage =
-      input.trim();
-
-
-    setInput('');
-
-    setError(null);
-
-    setIsLoading(true);
-
-
-    const newMessages = [
-      ...messages,
-
-      {
-        role: 'user' as const,
-        content: userMessage,
-      },
-    ];
-
-
-    setMessages(
-      newMessages
-    );
-
-
-    try {
-
-      const request: ChatRequest = {
-
-        message:
-          userMessage,
-
-        conversation_history:
-          messages,
-
-        vertical,
-
-        session_id:
-          sessionId,
-
-      };
-
-
-      const response =
-        await sendChatMessage(
-          request
-        );
-
-
-      let sc =
-        response.scorecard;
-
-
-      /*
-       * FALLBACK:
-       * Parse scorecard if backend
-       * returned it as JSON text.
-       */
+      event?.preventDefault();
 
       if (
-        !sc &&
-        response.response
+        !input.trim() ||
+        isLoading ||
+        !vertical
       ) {
-
-        try {
-
-          let raw =
-            response.response.trim();
+        return;
+      }
 
 
-          if (
-            raw.startsWith('```')
-          ) {
+      const userMessage =
+        input.trim();
 
-            raw =
-              raw
-                .replace(
-                  /^```(?:json)?\s*/i,
-                  ''
-                )
-                .replace(
-                  /\s*```$/,
-                  ''
-                )
-                .trim();
+      setInput('');
 
-          }
+      setError(null);
+
+      setIsLoading(true);
 
 
-          if (
-            raw.startsWith('{')
-          ) {
+      const history =
+        [...messages];
 
-            const parsed =
-              JSON.parse(raw);
+      const newMessages: ChatMessage[] = [
+        ...history,
+
+        {
+          role: 'user',
+          content: userMessage,
+        },
+      ];
+
+      setMessages(
+        newMessages
+      );
+
+
+      try {
+
+        const request: ChatRequest = {
+
+          message:
+            userMessage,
+
+          conversation_history:
+            history,
+
+          vertical,
+
+          session_id:
+            sessionId,
+
+        };
+
+
+        const response =
+          await sendChatMessage(
+            request
+          );
+
+
+        let returnedScorecard =
+          response.scorecard;
+
+
+        /* ====================================================
+           FALLBACK SCORECARD PARSING
+           ==================================================== */
+
+        if (
+          !returnedScorecard &&
+          response.response
+        ) {
+
+          try {
+
+            let raw =
+              response.response.trim();
 
 
             if (
-              parsed.overall_grade &&
-              parsed.sub_categories
+              raw.startsWith('```')
             ) {
 
-              sc =
-                parsed as ScorecardResponse;
+              raw =
+                raw
+                  .replace(
+                    /^```(?:json)?\s*/i,
+                    ''
+                  )
+                  .replace(
+                    /\s*```$/,
+                    ''
+                  )
+                  .trim();
 
             }
 
+
+            if (
+              raw.startsWith('{')
+            ) {
+
+              const parsed =
+                JSON.parse(raw);
+
+
+              if (
+                parsed &&
+                parsed.overall_grade &&
+                parsed.sub_categories
+              ) {
+
+                returnedScorecard =
+                  parsed as ScorecardResponse;
+
+              }
+
+            }
+
+          } catch {
+            // Normal text response.
           }
 
-        } catch {}
-
-      }
+        }
 
 
-      /* ======================================================
-         SCORECARD RECEIVED
-         ====================================================== */
+        /* ====================================================
+           SCORECARD
+           ==================================================== */
 
-      if (sc) {
+        if (
+          returnedScorecard
+        ) {
 
-        setScorecard(sc);
+          setScorecard(
+            returnedScorecard
+          );
 
-        setInterviewComplete(
-          true
-        );
+          setVertical(
+            returnedScorecard.vertical
+          );
 
-        setVertical(
-          sc.vertical
-        );
+          setInterviewComplete(
+            true
+          );
 
-      }
+          return;
+
+        }
 
 
-      /* ======================================================
-         NORMAL CHAT RESPONSE
-         ====================================================== */
+        /* ====================================================
+           NORMAL RESPONSE
+           ==================================================== */
 
-      else {
+        const cleaned =
+          cleanResponse(
+            response.response
+          );
+
+
+        /*
+         * Prevent the UI from displaying the exact
+         * same assistant message twice.
+         */
+
+        const lastAssistant =
+          [...history]
+            .reverse()
+            .find(
+              message =>
+                message.role ===
+                'assistant'
+            );
+
+
+        if (
+          lastAssistant &&
+          normalizeText(
+            lastAssistant.content
+          ) ===
+            normalizeText(
+              cleaned
+            )
+        ) {
+
+          return;
+
+        }
+
 
         setMessages(
-          prev => [
-            ...prev,
+          previous => [
+            ...previous,
 
             {
               role: 'assistant',
-              content:
-                stripMarkdown(
-                  response.response
-                ),
+              content: cleaned,
             },
           ]
         );
 
+      } catch (err) {
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to send message.'
+        );
+
+
+        setMessages(
+          previous =>
+            previous.slice(
+              0,
+              -1
+            )
+        );
+
+      } finally {
+
+        setIsLoading(false);
+
       }
 
-    }
-
-    catch (err) {
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to send message'
-      );
-
-
-      setMessages(
-        prev =>
-          prev.slice(
-            0,
-            -1
-          )
-      );
-
-    }
-
-    finally {
-
-      setIsLoading(false);
-
-    }
-
-  };
+    };
 
 
   /* ==========================================================
-     NEW ASSESSMENT
+     ENTER KEY
      ========================================================== */
 
-  const handleRestart = () => {
+  const handleKeyDown =
+    (
+      event: KeyboardEvent<HTMLTextAreaElement>
+    ) => {
 
-    window.location.href =
-      '/';
+      if (
+        event.key === 'Enter' &&
+        !event.shiftKey
+      ) {
 
-  };
+        event.preventDefault();
+
+        void handleSubmit();
+
+      }
+
+    };
 
 
   /* ==========================================================
-     DOWNLOAD PDF
+     PDF
      ========================================================== */
 
   const handleDownloadPDF =
@@ -866,7 +810,7 @@ export default function ChatInterface({
       } catch {
 
         setError(
-          'Failed to generate PDF'
+          'Failed to generate PDF.'
         );
 
       }
@@ -875,7 +819,20 @@ export default function ChatInterface({
 
 
   /* ==========================================================
-     VERTICAL PICKER
+     RESTART
+     ========================================================== */
+
+  const handleRestart =
+    () => {
+
+      window.location.href =
+        '/';
+
+    };
+
+
+  /* ==========================================================
+     BUSINESS SELECTOR
      ========================================================== */
 
   if (
@@ -884,9 +841,9 @@ export default function ChatInterface({
   ) {
 
     return (
-      <VerticalPicker
+      <BusinessSelector
         onSelect={
-          handleVerticalSelect
+          startAssessment
         }
       />
     );
@@ -904,44 +861,39 @@ export default function ChatInterface({
   ) {
 
     return (
-      <div className="min-h-screen bg-[#05040b]">
 
-        <ScorecardView
-          scorecard={
-            scorecard
-          }
-          onRestart={
-            handleRestart
-          }
-          onDownloadPDF={
-            handleDownloadPDF
-          }
-        />
+      <ScorecardView
+        scorecard={
+          scorecard
+        }
+        onRestart={
+          handleRestart
+        }
+        onDownloadPDF={
+          handleDownloadPDF
+        }
+      />
 
-      </div>
     );
 
   }
 
 
   /* ==========================================================
-     ASSESSMENT CALCULATIONS
+     PROGRESS
      ========================================================== */
 
   const userMessages =
     messages.filter(
-      msg =>
-        msg.role ===
+      message =>
+        message.role ===
         'user'
     );
 
 
   /*
-   * The first user message is simply:
-   * "I want an assessment for..."
-   *
-   * So it should NOT count as an answered
-   * assessment question.
+   * First user message is the
+   * "I want an assessment..." message.
    */
 
   const answeredQuestions =
@@ -951,7 +903,8 @@ export default function ChatInterface({
     );
 
 
-  const estimatedQuestions = 10;
+  const estimatedQuestions =
+    10;
 
 
   const progress =
@@ -965,36 +918,39 @@ export default function ChatInterface({
     );
 
 
+  const activeDomainIndex =
+    Math.min(
+      SECURITY_DOMAINS.length - 1,
+      Math.floor(
+        answeredQuestions / 2
+      )
+    );
+
+
   /* ==========================================================
-     MAIN ASSESSMENT UI
+     DASHBOARD
      ========================================================== */
 
   return (
 
-    <div className="min-h-screen bg-[#05040b] text-white relative">
+    <div className="min-h-screen bg-[#05040b] text-white">
 
 
-      {/* ======================================================
-          BACKGROUND
-          ====================================================== */}
+      {/* BACKGROUND */}
 
       <div className="fixed inset-0 pointer-events-none">
 
-        <div className="absolute top-[-220px] left-[35%] w-[700px] h-[500px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
+        <div className="absolute top-[-220px] left-[30%] w-[700px] h-[500px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
 
-        <div className="absolute top-[45%] right-[-200px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.05] blur-[170px]" />
-
-        <div className="absolute bottom-[-200px] left-[10%] w-[500px] h-[400px] rounded-full bg-fuchsia-700/[0.04] blur-[170px]" />
+        <div className="absolute right-[-200px] top-[35%] w-[550px] h-[550px] rounded-full bg-fuchsia-700/[0.04] blur-[170px]" />
 
       </div>
 
 
-      {/* ======================================================
-          GRID
-          ====================================================== */}
+      {/* GRID */}
 
       <div
-        className="fixed inset-0 opacity-[0.028] pointer-events-none"
+        className="fixed inset-0 opacity-[0.025] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
@@ -1004,51 +960,37 @@ export default function ChatInterface({
       />
 
 
-      {/* ======================================================
-          PAGE
-          ====================================================== */
-
       <div className="relative z-10 flex min-h-screen">
 
 
         {/* ====================================================
-            LEFT SIDEBAR
+            SIDEBAR
             ==================================================== */}
 
-        <aside className="hidden lg:flex w-60 flex-shrink-0 border-r border-white/[0.06] bg-[#07060d]/90 flex-col sticky top-0 h-screen">
+        <aside className="hidden lg:flex w-[220px] flex-shrink-0 border-r border-white/[0.06] bg-[#07050d] flex-col">
 
-
-          {/* BRAND */}
-
-          <div className="px-5 py-5 border-b border-white/[0.06]">
+          <div className="px-5 py-5 border-b border-white/[0.05]">
 
             <Link
               href="/"
               className="flex items-center gap-3"
             >
 
-              <div className="relative">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
 
-                <div className="absolute inset-0 bg-violet-500/20 blur-xl rounded-full" />
-
-                <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
-
-                  <Shield className="w-4 h-4 text-white" />
-
-                </div>
+                <Shield className="w-4 h-4 text-white" />
 
               </div>
-
 
               <div>
 
-                <div className="text-sm font-semibold text-white">
+                <p className="text-sm font-semibold">
                   CyberCISO
-                </div>
+                </p>
 
-                <div className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
-                  AI security advisor
-                </div>
+                <p className="text-[8px] text-gray-600 uppercase tracking-[0.2em]">
+                  Virtual CISO
+                </p>
 
               </div>
 
@@ -1057,103 +999,107 @@ export default function ChatInterface({
           </div>
 
 
-          {/* NEW ASSESSMENT */}
-
-          <div className="px-4 py-4">
-
-            <Link
-              href="/"
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-violet-400/10 bg-violet-500/[0.07] text-violet-300 text-xs hover:bg-violet-500/[0.12] transition"
-            >
-
-              <Sparkles className="w-3.5 h-3.5" />
-
-              New Assessment
-
-            </Link>
-
-          </div>
-
-
-          {/* NAV */}
-
-          <div className="px-3">
+          <nav className="px-3 py-5">
 
             <p className="px-3 mb-2 text-[8px] uppercase tracking-[0.2em] text-gray-700">
               Assessment
             </p>
 
 
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/[0.045] text-gray-200">
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-violet-500/[0.08] text-gray-200">
 
               <Activity className="w-3.5 h-3.5 text-violet-400" />
 
-              <span className="text-xs">
+              <span className="text-[10px]">
                 Live assessment
               </span>
 
             </div>
 
-          </div>
+
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-gray-700">
+
+              <BarChart3 className="w-3.5 h-3.5" />
+
+              <span className="text-[10px]">
+                Security posture
+              </span>
+
+            </div>
+
+          </nav>
 
 
-          {/* CURRENT */}
-
-          <div className="px-4 mt-6">
+          <div className="px-4">
 
             <p className="px-2 mb-2 text-[8px] uppercase tracking-[0.2em] text-gray-700">
               Current
             </p>
 
 
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+            <div className="p-3 rounded-xl border border-violet-400/[0.1] bg-violet-500/[0.025]">
 
               <div className="flex items-center gap-2">
 
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.7)]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.8)]" />
 
-                <span className="text-xs text-gray-300">
-                  {vertical
-                    ? formatVertical(
-                        vertical
-                      )
-                    : 'Assessment'}
+                <span className="text-[9px] text-gray-400">
+                  {formatVertical(
+                    vertical
+                  )}
                 </span>
 
               </div>
 
 
-              <p className="text-[9px] text-gray-700 mt-1.5 ml-3.5">
-                Assessment in progress
-              </p>
+              <div className="mt-3 h-1 rounded-full bg-white/[0.05] overflow-hidden">
+
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
+                  style={{
+                    width:
+                      `${Math.max(
+                        progress,
+                        3
+                      )}%`,
+                  }}
+                />
+
+              </div>
+
+
+              <div className="flex justify-between mt-2">
+
+                <span className="text-[7px] text-gray-700">
+                  {progress}% complete
+                </span>
+
+                <span className="text-[7px] text-violet-400">
+                  LIVE
+                </span>
+
+              </div>
 
             </div>
 
           </div>
 
 
-          {/* BOTTOM */}
+          <div className="mt-auto p-5">
 
-          <div className="mt-auto p-4">
+            <div className="flex items-center gap-2">
 
-            <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-3">
+              <Lock className="w-3 h-3 text-emerald-400" />
 
-              <div className="flex items-center gap-2">
-
-                <Lock className="w-3.5 h-3.5 text-emerald-400" />
-
-                <span className="text-[9px] text-gray-500">
-                  Secure session
-                </span>
-
-              </div>
-
-
-              <p className="text-[8px] text-emerald-400/60 mt-1 ml-5">
-                Protected locally
-              </p>
+              <span className="text-[8px] text-gray-600">
+                Secure session
+              </span>
 
             </div>
+
+            <p className="text-[7px] text-gray-700 ml-5 mt-1">
+              Protected assessment
+            </p>
 
           </div>
 
@@ -1161,39 +1107,35 @@ export default function ChatInterface({
 
 
         {/* ====================================================
-            MAIN CONTENT
+            MAIN
             ==================================================== */}
 
         <main className="flex-1 min-w-0">
 
 
-          {/* ==================================================
-              TOP HEADER
-              ================================================== */}
+          {/* HEADER */}
 
-          <header className="sticky top-0 z-30 h-16 border-b border-white/[0.06] bg-[#07060d]/85 backdrop-blur-xl">
+          <header className="h-16 border-b border-white/[0.06] bg-[#07050d]/90 backdrop-blur-xl">
 
             <div className="h-full px-5 lg:px-7 flex items-center justify-between">
 
-
               <div className="flex items-center gap-3">
 
-                <div className="lg:hidden w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
+                <div className="lg:hidden w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
 
-                  <Shield className="w-4 h-4 text-white" />
+                  <Shield className="w-4 h-4" />
 
                 </div>
 
-
                 <div>
 
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-gray-600">
-                    Security operations
+                  <p className="text-[8px] uppercase tracking-[0.2em] text-gray-700">
+                    Security Operations
                   </p>
 
-                  <h1 className="text-sm font-semibold text-gray-200">
+                  <p className="text-[11px] text-gray-300">
                     Assessment overview
-                  </h1>
+                  </p>
 
                 </div>
 
@@ -1202,25 +1144,18 @@ export default function ChatInterface({
 
               <div className="flex items-center gap-3">
 
+                <span className="hidden sm:flex items-center gap-2 text-[9px] text-gray-600">
 
-                {vertical && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
 
-                  <span className="hidden sm:block px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[10px] text-violet-300">
+                  Secure connection
 
-                    {formatVertical(
-                      vertical
-                    )}
-
-                  </span>
-
-                )}
+                </span>
 
 
-                <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                <div className="w-8 h-8 rounded-lg border border-white/[0.06] flex items-center justify-center">
 
-                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.8)]" />
-
-                  CyberCISO AI is analyzing
+                  <Settings className="w-3.5 h-3.5 text-gray-600" />
 
                 </div>
 
@@ -1235,11 +1170,60 @@ export default function ChatInterface({
               PAGE CONTENT
 
               IMPORTANT:
-              NO overflow-y-auto HERE.
-              The entire browser page scrolls.
+              There is deliberately NO overflow-y-auto here.
+              The browser page is the only scroll container.
               ================================================== */}
 
-          <div className="px-4 sm:px-6 lg:px-7 py-6 max-w-[1500px] mx-auto">
+          <div className="px-5 lg:px-7 py-6 max-w-[1500px] mx-auto">
+
+
+            {/* TITLE */}
+
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
+
+              <div>
+
+                <div className="flex items-center gap-2 mb-2">
+
+                  <span className="text-[8px] uppercase tracking-[0.22em] text-violet-400">
+                    Security Assessment
+                  </span>
+
+                  <span className="px-2 py-0.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[7px] text-violet-300">
+                    LIVE
+                  </span>
+
+                </div>
+
+
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+
+                  Assessment overview
+                  <span className="text-violet-400">
+                    .
+                  </span>
+
+                </h1>
+
+
+                <p className="text-[9px] text-gray-600 mt-1">
+                  Adaptive security interview powered by CyberCISO AI.
+                </p>
+
+              </div>
+
+
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-400/[0.1] bg-violet-500/[0.025]">
+
+                <Sparkles className="w-3 h-3 text-violet-400" />
+
+                <span className="text-[8px] text-gray-500">
+                  CyberCISO AI is analyzing
+                </span>
+
+              </div>
+
+            </div>
 
 
             {/* =================================================
@@ -1248,141 +1232,69 @@ export default function ChatInterface({
 
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
 
+              {[
+                {
+                  label: 'Questions',
+                  value: answeredQuestions,
+                  icon: Zap,
+                },
+                {
+                  label: 'Progress',
+                  value: `${progress}%`,
+                  icon: BarChart3,
+                },
+                {
+                  label: 'Security Domains',
+                  value: '5',
+                  icon: Shield,
+                },
+                {
+                  label: 'Framework',
+                  value: 'NIST + CIS',
+                  icon: Lock,
+                },
+              ].map(
+                (stat) => {
 
-              {/* QUESTIONS */}
+                  const Icon =
+                    stat.icon;
 
-              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+                  return (
 
-                <div className="flex items-center justify-between">
+                    <div
+                      key={stat.label}
+                      className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4"
+                    >
 
-                  <div>
+                      <div className="flex items-center justify-between">
 
-                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
-                      Questions
-                    </p>
+                        <div>
 
-                    <p className="text-xl font-semibold text-gray-200 mt-1">
-                      {answeredQuestions}
-                    </p>
+                          <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                            {stat.label}
+                          </p>
 
-                    <p className="text-[8px] text-gray-700">
-                      answered
-                    </p>
+                          <p className="text-xl font-semibold text-gray-200 mt-1">
+                            {stat.value}
+                          </p>
 
-                  </div>
-
-
-                  <div className="w-8 h-8 rounded-lg bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                    <Zap className="w-3.5 h-3.5 text-violet-400" />
-
-                  </div>
-
-                </div>
-
-              </div>
-
-
-              {/* PROGRESS */}
-
-              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
-
-                <div className="flex items-center justify-between">
-
-                  <div>
-
-                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
-                      Progress
-                    </p>
-
-                    <p className="text-xl font-semibold text-gray-200 mt-1">
-                      {progress}%
-                    </p>
-
-                    <p className="text-[8px] text-gray-700">
-                      assessment progress
-                    </p>
-
-                  </div>
+                        </div>
 
 
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/[0.08] border border-blue-400/10 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
 
-                    <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
+                          <Icon className="w-3.5 h-3.5 text-violet-400" />
 
-                  </div>
+                        </div>
 
-                </div>
+                      </div>
 
-              </div>
+                    </div>
 
+                  );
 
-              {/* DOMAINS */}
-
-              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
-
-                <div className="flex items-center justify-between">
-
-                  <div>
-
-                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
-                      Domains
-                    </p>
-
-                    <p className="text-xl font-semibold text-gray-200 mt-1">
-                      5
-                    </p>
-
-                    <p className="text-[8px] text-gray-700">
-                      security areas
-                    </p>
-
-                  </div>
-
-
-                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/[0.08] border border-fuchsia-400/10 flex items-center justify-center">
-
-                    <CircleDot className="w-3.5 h-3.5 text-fuchsia-400" />
-
-                  </div>
-
-                </div>
-
-              </div>
-
-
-              {/* FRAMEWORKS */}
-
-              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
-
-                <div className="flex items-center justify-between">
-
-                  <div>
-
-                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
-                      Frameworks
-                    </p>
-
-                    <p className="text-sm font-semibold text-gray-200 mt-2">
-                      NIST + CIS
-                    </p>
-
-                    <p className="text-[8px] text-gray-700">
-                      active controls
-                    </p>
-
-                  </div>
-
-
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/[0.08] border border-emerald-400/10 flex items-center justify-center">
-
-                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
-
-                  </div>
-
-                </div>
-
-              </div>
+                }
+              )}
 
             </div>
 
@@ -1391,14 +1303,12 @@ export default function ChatInterface({
                 MAIN GRID
                 ================================================= */}
 
-            <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-4">
+            <div className="grid xl:grid-cols-[minmax(0,1fr)_285px] gap-4">
 
 
-              {/* =================================================
-                  CHAT
-                  ================================================= */}
+              {/* CHAT */}
 
-              <section className="rounded-2xl border border-white/[0.08] bg-[#090811]/90 overflow-hidden">
+              <section className="rounded-xl border border-white/[0.07] bg-[#090811]/90 overflow-hidden">
 
 
                 {/* CHAT HEADER */}
@@ -1407,20 +1317,19 @@ export default function ChatInterface({
 
                   <div className="flex items-center gap-3">
 
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
 
                       <Shield className="w-4 h-4 text-white" />
 
                     </div>
 
-
                     <div>
 
-                      <p className="text-xs font-semibold text-gray-200">
+                      <p className="text-[10px] font-semibold text-gray-200">
                         CyberCISO AI
                       </p>
 
-                      <p className="text-[8px] text-gray-600">
+                      <p className="text-[7px] text-gray-700">
                         Online • Security analyst
                       </p>
 
@@ -1429,13 +1338,11 @@ export default function ChatInterface({
                   </div>
 
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 text-[8px] text-gray-600">
 
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
 
-                    <span className="text-[9px] text-gray-600">
-                      Live
-                    </span>
+                    Online
 
                   </div>
 
@@ -1447,63 +1354,49 @@ export default function ChatInterface({
 
                     NO overflow-y-auto.
                     NO fixed height.
-                    NO internal scrollbar.
-
-                    The browser/page handles scrolling.
                     ================================================= */}
 
                 <div className="px-5 py-6 space-y-5">
 
-
                   {messages.map(
                     (
-                      msg,
-                      idx
+                      message,
+                      index
                     ) => (
 
                       <div
-                        key={idx}
+                        key={`${message.role}-${index}`}
                         className={cn(
-                          'flex gap-3 message-enter',
-                          msg.role ===
-                            'user' &&
-                            'justify-end'
+                          'flex gap-3',
+                          message.role === 'user'
+                            ? 'justify-end'
+                            : 'justify-start'
                         )}
                       >
 
-
-                        {/* AI ICON */}
-
-                        {msg.role ===
+                        {message.role ===
                           'assistant' && (
 
-                          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-md shadow-violet-500/20 mt-0.5">
+                          <div className="w-8 h-8 flex-shrink-0 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
 
-                            <Shield className="w-4 h-4 text-white" />
+                            <Shield className="w-3.5 h-3.5 text-violet-400" />
 
                           </div>
 
                         )}
 
 
-                        {/* MESSAGE */}
-
                         <div
                           className={cn(
-                            'max-w-[85%] rounded-2xl px-4 py-3',
-                            msg.role ===
-                              'user'
-
-                              ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white rounded-br-md shadow-lg shadow-violet-500/10'
-
-                              : 'bg-white/[0.035] text-gray-300 border border-white/[0.07] rounded-bl-md'
+                            'max-w-[78%] px-4 py-3',
+                            message.role === 'user'
+                              ? 'rounded-2xl rounded-br-sm bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white'
+                              : 'rounded-2xl rounded-tl-sm border border-white/[0.07] bg-white/[0.025] text-gray-400'
                           )}
                         >
 
-                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
-
-                            {msg.content}
-
+                          <p className="text-[11px] leading-relaxed whitespace-pre-wrap">
+                            {message.content}
                           </p>
 
                         </div>
@@ -1514,20 +1407,16 @@ export default function ChatInterface({
                   )}
 
 
-                  {/* TYPING */}
-
                   {isLoading && (
                     <TypingIndicator />
                   )}
 
 
-                  {/* ERROR */}
-
                   {error && (
 
                     <div className="flex justify-center">
 
-                      <div className="px-4 py-3 rounded-xl border border-red-400/10 bg-red-500/[0.05] text-red-300 text-xs">
+                      <div className="max-w-lg px-4 py-3 rounded-xl border border-red-400/10 bg-red-500/[0.05] text-red-300 text-[9px]">
 
                         {error}
 
@@ -1540,11 +1429,7 @@ export default function ChatInterface({
                 </div>
 
 
-                {/* =================================================
-                    INPUT
-
-                    This is NOT a scroll container.
-                    ================================================= */}
+                {/* INPUT */}
 
                 <div className="px-5 pb-5">
 
@@ -1564,31 +1449,14 @@ export default function ChatInterface({
                         value={
                           input
                         }
-                        onChange={
-                          e =>
-                            setInput(
-                              e.target.value
-                            )
+                        onChange={(event) =>
+                          setInput(
+                            event.target.value
+                          )
                         }
-                        onKeyDown={(
-                          e: KeyboardEvent<HTMLTextAreaElement>
-                        ) => {
-
-                          if (
-                            e.key ===
-                              'Enter' &&
-                            !e.shiftKey
-                          ) {
-
-                            e.preventDefault();
-
-                            handleSubmit(
-                              e
-                            );
-
-                          }
-
-                        }}
+                        onKeyDown={
+                          handleKeyDown
+                        }
                         placeholder="Tell CyberCISO about your security..."
                         disabled={
                           isLoading
@@ -1606,13 +1474,11 @@ export default function ChatInterface({
                           isLoading
                         }
                         className={cn(
-                          'w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0',
+                          'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-all',
 
                           input.trim() &&
                             !isLoading
-
-                            ? 'bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-lg shadow-violet-500/20 hover:scale-[1.03]'
-
+                            ? 'bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/20 hover:scale-[1.03]'
                             : 'bg-white/[0.04] text-gray-700 cursor-not-allowed'
                         )}
                         aria-label="Send message"
@@ -1625,18 +1491,17 @@ export default function ChatInterface({
                     </div>
 
 
-                    <div className="flex items-center justify-between px-3 pb-1 pt-1">
+                    <div className="flex items-center justify-between px-3 pt-1.5">
 
-                      <span className="text-[8px] text-gray-700">
+                      <span className="text-[7px] text-gray-700">
                         Enter to send • Shift+Enter for new line
                       </span>
 
-
-                      <span className="flex items-center gap-1.5 text-[8px] text-gray-700">
+                      <span className="flex items-center gap-1 text-[7px] text-gray-700">
 
                         <Lock className="w-2.5 h-2.5" />
 
-                        Session protected
+                        Protected
 
                       </span>
 
@@ -1649,46 +1514,41 @@ export default function ChatInterface({
               </section>
 
 
-              {/* =================================================
-                  RIGHT SIDEBAR
-                  ================================================= */}
+              {/* RIGHT PANEL */}
 
               <aside className="space-y-4">
 
 
-                {/* =================================================
-                    PROGRESS
-                    ================================================= */}
+                {/* PROGRESS */}
 
                 <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
                   <div className="flex items-center justify-between mb-1">
 
-                    <p className="text-xs font-medium text-gray-300">
+                    <p className="text-[9px] text-gray-300">
                       Assessment progress
                     </p>
 
-                    <span className="text-xs font-semibold text-violet-300">
+                    <span className="text-[9px] text-violet-400">
                       {progress}%
                     </span>
 
                   </div>
 
-
-                  <p className="text-[8px] text-gray-700 mb-3">
+                  <p className="text-[7px] text-gray-700 mb-4">
                     Adaptive interview
                   </p>
 
 
-                  <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
 
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
                       style={{
                         width:
                           `${Math.max(
                             progress,
-                            3
+                            2
                           )}%`,
                       }}
                     />
@@ -1696,13 +1556,13 @@ export default function ChatInterface({
                   </div>
 
 
-                  <div className="flex justify-between mt-2 text-[8px] text-gray-700">
+                  <div className="flex justify-between mt-2">
 
-                    <span>
+                    <span className="text-[7px] text-gray-700">
                       {answeredQuestions} answered
                     </span>
 
-                    <span>
+                    <span className="text-[7px] text-gray-700">
                       adaptive
                     </span>
 
@@ -1711,24 +1571,21 @@ export default function ChatInterface({
                 </div>
 
 
-                {/* =================================================
-                    SECURITY COVERAGE
-                    ================================================= */}
+                {/* SECURITY COVERAGE */}
 
                 <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
                   <div className="flex items-center justify-between mb-1">
 
-                    <p className="text-xs font-medium text-gray-300">
+                    <p className="text-[9px] text-gray-300">
                       Security coverage
                     </p>
 
-                    <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+                    <BarChart3 className="w-3 h-3 text-violet-400" />
 
                   </div>
 
-
-                  <p className="text-[8px] text-gray-700 mb-4">
+                  <p className="text-[7px] text-gray-700 mb-4">
                     Live assessment areas
                   </p>
 
@@ -1741,35 +1598,26 @@ export default function ChatInterface({
                         index
                       ) => {
 
+                        const active =
+                          index <=
+                          activeDomainIndex;
+
+                        const value =
+                          active
+                            ? Math.min(
+                                100,
+                                Math.max(
+                                  8,
+                                  progress +
+                                    20 -
+                                    index *
+                                      7
+                                )
+                              )
+                            : 2;
+
                         const Icon =
                           domain.icon;
-
-
-                        /*
-                         * First domain becomes active
-                         * after the assessment begins.
-                         *
-                         * Later domains unlock as
-                         * questions progress.
-                         */
-
-                        const domainProgress =
-                          Math.min(
-                            100,
-                            Math.max(
-                              3,
-                              progress -
-                                index *
-                                  18
-                            )
-                          );
-
-
-                        const active =
-                          progress >=
-                          index *
-                            18;
-
 
                         return (
 
@@ -1785,7 +1633,7 @@ export default function ChatInterface({
 
                                 <Icon
                                   className={cn(
-                                    'w-3 h-3',
+                                    'w-2.5 h-2.5',
                                     active
                                       ? 'text-violet-400'
                                       : 'text-gray-700'
@@ -1794,7 +1642,7 @@ export default function ChatInterface({
 
                                 <span
                                   className={cn(
-                                    'text-[9px]',
+                                    'text-[8px]',
                                     active
                                       ? 'text-gray-400'
                                       : 'text-gray-700'
@@ -1807,18 +1655,10 @@ export default function ChatInterface({
 
                               </div>
 
-
-                              <span
-                                className={cn(
-                                  'text-[8px]',
-                                  active
-                                    ? 'text-violet-400/70'
-                                    : 'text-gray-800'
-                                )}
-                              >
+                              <span className="text-[7px] text-gray-700">
 
                                 {active
-                                  ? `${domainProgress}%`
+                                  ? `${value}%`
                                   : 'pending'}
 
                               </span>
@@ -1829,10 +1669,10 @@ export default function ChatInterface({
                             <div className="h-1 rounded-full bg-white/[0.04] overflow-hidden">
 
                               <div
-                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-500"
                                 style={{
                                   width:
-                                    `${domainProgress}%`,
+                                    `${value}%`,
                                 }}
                               />
 
@@ -1850,24 +1690,21 @@ export default function ChatInterface({
                 </div>
 
 
-                {/* =================================================
-                    ASSESSMENT ACTIVITY
-                    ================================================= */}
+                {/* ACTIVITY */}
 
                 <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
                   <div className="flex items-center justify-between mb-1">
 
-                    <p className="text-xs font-medium text-gray-300">
+                    <p className="text-[9px] text-gray-300">
                       Assessment activity
                     </p>
 
-                    <Activity className="w-3.5 h-3.5 text-violet-400" />
+                    <Activity className="w-3 h-3 text-violet-400" />
 
                   </div>
 
-
-                  <p className="text-[8px] text-gray-700 mb-4">
+                  <p className="text-[7px] text-gray-700 mb-4">
                     Security areas being reviewed
                   </p>
 
@@ -1882,14 +1719,11 @@ export default function ChatInterface({
 
                         const active =
                           index ===
-                          Math.min(
-                            4,
-                            Math.floor(
-                              answeredQuestions /
-                                2
-                            )
-                          );
+                          activeDomainIndex;
 
+                        const completed =
+                          index <
+                          activeDomainIndex;
 
                         return (
 
@@ -1905,17 +1739,20 @@ export default function ChatInterface({
                               <span
                                 className={cn(
                                   'w-1.5 h-1.5 rounded-full border',
-                                  active
-                                    ? 'bg-violet-400 border-violet-300 shadow-[0_0_6px_rgba(167,139,250,.8)]'
+                                  completed
+                                    ? 'bg-emerald-400 border-emerald-300'
+                                    : active
+                                    ? 'bg-violet-400 border-violet-300 shadow-[0_0_7px_rgba(167,139,250,.8)]'
                                     : 'border-gray-700'
                                 )}
                               />
 
                               <span
                                 className={cn(
-                                  'text-[9px]',
-                                  active
-                                    ? 'text-gray-300'
+                                  'text-[8px]',
+                                  active ||
+                                    completed
+                                    ? 'text-gray-400'
                                     : 'text-gray-700'
                                 )}
                               >
@@ -1927,17 +1764,12 @@ export default function ChatInterface({
                             </div>
 
 
-                            <span
-                              className={cn(
-                                'text-[8px]',
-                                active
-                                  ? 'text-violet-400/70'
-                                  : 'text-gray-800'
-                              )}
-                            >
+                            <span className="text-[7px] text-gray-700">
 
-                              {active
-                                ? 'active'
+                              {completed
+                                ? 'done'
+                                : active
+                                ? 'reviewing'
                                 : 'pending'}
 
                             </span>
@@ -1954,38 +1786,80 @@ export default function ChatInterface({
                 </div>
 
 
-                {/* =================================================
-                    NO FRAMEWORK COVERAGE CARD HERE
-                    ================================================= */}
+                {/* FRAMEWORKS */}
+
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
+
+                  <div className="flex items-center gap-2 mb-4">
+
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+
+                    <div>
+
+                      <p className="text-[9px] text-gray-300">
+                        Framework coverage
+                      </p>
+
+                      <p className="text-[7px] text-gray-700">
+                        Assessment standards
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  <div className="space-y-2">
+
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-white/[0.05] bg-white/[0.015]">
+
+                      <span className="text-[8px] text-gray-500">
+                        NIST CSF 2.0
+                      </span>
+
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
+                    </div>
+
+
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-white/[0.05] bg-white/[0.015]">
+
+                      <span className="text-[8px] text-gray-500">
+                        CIS Controls v8
+                      </span>
+
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
+                    </div>
+
+                  </div>
+
+                </div>
 
               </aside>
 
             </div>
 
 
-            {/* =================================================
-                BOTTOM STATUS
-                ================================================= */}
+            {/* BOTTOM STATUS */}
 
             <div className="grid md:grid-cols-3 gap-3 mt-4">
 
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/90 px-4 py-3 flex items-center gap-3">
 
-              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-violet-500/[0.08] flex items-center justify-center">
 
-                <div className="w-7 h-7 rounded-lg bg-violet-500/[0.07] flex items-center justify-center">
-
-                  <Sparkles className="w-3 h-3 text-violet-400" />
+                  <Zap className="w-3 h-3 text-violet-400" />
 
                 </div>
 
-
                 <div>
 
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
-                    AI status
+                  <p className="text-[7px] uppercase tracking-[0.15em] text-gray-700">
+                    AI Status
                   </p>
 
-                  <p className="text-[9px] text-gray-500">
+                  <p className="text-[8px] text-gray-500">
                     Adaptive analysis active
                   </p>
 
@@ -1994,23 +1868,22 @@ export default function ChatInterface({
               </div>
 
 
-              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/90 px-4 py-3 flex items-center gap-3">
 
-                <div className="w-7 h-7 rounded-lg bg-blue-500/[0.07] flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/[0.08] flex items-center justify-center">
 
                   <Lock className="w-3 h-3 text-blue-400" />
 
                 </div>
 
-
                 <div>
 
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                  <p className="text-[7px] uppercase tracking-[0.15em] text-gray-700">
                     Privacy
                   </p>
 
-                  <p className="text-[9px] text-gray-500">
-                    Session data protected
+                  <p className="text-[8px] text-gray-500">
+                    Session protected
                   </p>
 
                 </div>
@@ -2018,22 +1891,21 @@ export default function ChatInterface({
               </div>
 
 
-              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/90 px-4 py-3 flex items-center gap-3">
 
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/[0.07] flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/[0.08] flex items-center justify-center">
 
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
 
                 </div>
 
-
                 <div>
 
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                  <p className="text-[7px] uppercase tracking-[0.15em] text-gray-700">
                     Standards
                   </p>
 
-                  <p className="text-[9px] text-gray-500">
+                  <p className="text-[8px] text-gray-500">
                     NIST + CIS aligned
                   </p>
 
@@ -2042,7 +1914,6 @@ export default function ChatInterface({
               </div>
 
             </div>
-
 
           </div>
 
