@@ -1,156 +1,2055 @@
-/* ==========================================================
-   MAIN CHAT UI  (this is what renders the 2nd screenshot)
-   ========================================================== */
+'use client';
 
-return (
-  <div className="min-h-screen bg-[#05040b] text-white">
-    {/* Background glows + grid */}
-    <div className="pointer-events-none fixed inset-0">
-      <div className="absolute left-[30%] top-[-250px] h-[600px] w-[700px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
-      <div className="absolute right-[-200px] top-[35%] h-[500px] w-[500px] rounded-full bg-blue-700/[0.05] blur-[170px]" />
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  KeyboardEvent,
+} from 'react';
+
+import {
+  Send,
+  Shield,
+  ArrowLeft,
+  CheckCircle2,
+  Activity,
+  BarChart3,
+  Lock,
+  Database,
+  Network,
+  Mail,
+  Siren,
+  Users,
+  Sparkles,
+  Zap,
+  CircleDot,
+  RotateCcw,
+} from 'lucide-react';
+
+import Link from 'next/link';
+
+import {
+  ChatMessage,
+  ChatRequest,
+  Vertical,
+  ScorecardResponse,
+} from '@/types';
+
+import {
+  sendChatMessage,
+} from '@/lib/api';
+
+import {
+  cn,
+  formatVertical,
+  generateSessionId,
+} from '@/lib/utils';
+
+import {
+  exportScorecardToPDF,
+} from '@/lib/pdf';
+
+import ScorecardView from './ScorecardView';
+
+
+/* ============================================================
+   FIRST QUESTIONS
+   ============================================================ */
+
+const FIRST_QUESTIONS: Record<Vertical, string> = {
+  retail:
+    'How many employees access your point-of-sale systems and inventory databases?',
+
+  healthcare_clinic:
+    'How many staff members access your electronic health records (EHR) system?',
+
+  professional_services:
+    'How many team members access client confidential data on a regular basis?',
+};
+
+
+/* ============================================================
+   SECURITY DOMAINS
+   ============================================================ */
+
+const SECURITY_DOMAINS = [
+  {
+    key: 'access',
+    label: 'Access Control',
+    short: 'Access',
+    icon: Shield,
+  },
+
+  {
+    key: 'backup',
+    label: 'Data Backup',
+    short: 'Backup',
+    icon: Database,
+  },
+
+  {
+    key: 'network',
+    label: 'Network Security',
+    short: 'Network',
+    icon: Network,
+  },
+
+  {
+    key: 'phishing',
+    label: 'Email & Phishing',
+    short: 'Phishing',
+    icon: Mail,
+  },
+
+  {
+    key: 'incident',
+    label: 'Incident Response',
+    short: 'Incident',
+    icon: Siren,
+  },
+];
+
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+function stripMarkdown(text: string): string {
+  let out = text
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, '')
+    .replace(/<thought>[\s\S]*?<\/thought>\s*/gi, '')
+    .replace(/<\/?(think|thinking|thought|answer)[^>]*>/gi, '');
+
+  const lines = out.split('\n');
+
+  let last = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim().toLowerCase();
+
+    if (t === 'response') {
+      last = i;
+    }
+  }
+
+  if (last !== -1) {
+    out = lines.slice(last + 1).join('\n');
+  }
+
+  return out
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .trim();
+}
+
+
+/* ============================================================
+   NOTIFICATION SOUND
+   ============================================================ */
+
+function playNotificationSound() {
+  try {
+    const ctx = new AudioContext();
+
+    const osc = ctx.createOscillator();
+
+    const gain = ctx.createGain();
+
+    osc.connect(gain);
+
+    gain.connect(ctx.destination);
+
+    osc.type = 'sine';
+
+    osc.frequency.setValueAtTime(
+      880,
+      ctx.currentTime
+    );
+
+    osc.frequency.exponentialRampToValueAtTime(
+      660,
+      ctx.currentTime + 0.15
+    );
+
+    gain.gain.setValueAtTime(
+      0.05,
+      ctx.currentTime
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.001,
+      ctx.currentTime + 0.3
+    );
+
+    osc.start(ctx.currentTime);
+
+    osc.stop(
+      ctx.currentTime + 0.3
+    );
+
+  } catch {}
+}
+
+
+/* ============================================================
+   TYPING INDICATOR
+   ============================================================ */
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-start gap-3 message-enter">
+
+      <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+
+        <Shield className="w-4 h-4 text-white" />
+
+      </div>
+
+
+      <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.035] px-5 py-4">
+
+        <div className="flex items-center gap-1.5">
+
+          <div className="typing-dot w-1.5 h-1.5 rounded-full bg-violet-400" />
+
+          <div className="typing-dot w-1.5 h-1.5 rounded-full bg-violet-400" />
+
+          <div className="typing-dot w-1.5 h-1.5 rounded-full bg-violet-400" />
+
+        </div>
+
+      </div>
+
     </div>
-    <div
-      className="pointer-events-none fixed inset-0 opacity-[0.025]"
-      style={{
-        backgroundImage:
-          'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
-        backgroundSize: '48px 48px',
-      }}
-    />
+  );
+}
 
-    <div className="relative z-10">
-      {/* HEADER */}
-      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#07060d]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-lg shadow-violet-500/20">
-              <Shield className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold">CyberCISO</div>
-              <div className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
-                AI security advisor
-              </div>
-            </div>
-          </Link>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-full border border-violet-400/10 bg-violet-500/[0.06] px-3 py-1.5 sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-              <span className="text-[10px] text-violet-300">{businessName}</span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-gray-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Secure
-            </div>
-          </div>
-        </div>
-      </header>
+/* ============================================================
+   VERTICAL PICKER
+   ============================================================ */
 
-      {/* MAIN */}
-      <main className="mx-auto max-w-6xl px-5 py-8">
-        {/* TITLE + progress */}
-        <div className="mb-7">
-          <div className="mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[0.25em] text-violet-400/70">
-            <Activity className="h-3.5 w-3.5" />
-            Adaptive security interview
-          </div>
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Security assessment
-                <span className="text-violet-400">.</span>
-              </h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">
-                Tell CyberCISO about your security setup and we&apos;ll build your
-                personalized security posture.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-gray-600">
-              <BarChart3 className="h-3.5 w-3.5 text-violet-400" />
-              {progress}% complete
-            </div>
-          </div>
-        </div>
+function VerticalPicker({
+  onSelect,
+}: {
+  onSelect: (v: Vertical) => void;
+}) {
 
-        {/* Two-column layout (chat left + overview sidebar right) */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          {/* LEFT – chat */}
-          <div className="flex flex-col rounded-2xl border border-white/[0.07] bg-white/[0.02]">
-            {/* messages list + input form live here */}
-            …
-          </div>
+  return (
+    <div className="min-h-screen bg-[#05040b] text-white relative overflow-hidden">
 
-          {/* RIGHT – Assessment overview (exactly what you see in the 2nd image) */}
-          <aside className="space-y-5">
-            {/* Assessment overview card */}
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-300">
-                  Assessment overview
-                </span>
-                <span className="text-[10px] text-violet-300">{progress}%</span>
-              </div>
+      <div className="fixed inset-0 pointer-events-none">
 
-              {/* progress bar */}
-              <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
+        <div className="absolute top-[-180px] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-violet-700/[0.12] blur-[180px]" />
 
-              {/* domain list */}
-              <div className="space-y-2">
-                {SECURITY_DOMAINS.map((domain) => {
-                  const Icon = domain.icon;
-                  return (
-                    <div
-                      key={domain.key}
-                      className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2.5"
-                    >
-                      <Icon className="h-3.5 w-3.5 text-violet-400" />
-                      <span className="text-[10px] text-gray-500">
-                        {domain.label}
-                      </span>
-                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-400/60" />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+        <div className="absolute bottom-[-200px] right-[-150px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.08] blur-[160px]" />
 
-            {/* Framework coverage card */}
-            <div className="rounded-2xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                <span className="text-xs font-medium text-gray-300">
-                  Framework coverage
-                </span>
-              </div>
-              <p className="text-[9px] text-gray-600">Assessment standards</p>
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between rounded-lg border border-white/[0.05] bg-black/10 px-3 py-2">
-                  <span className="text-[10px] text-gray-500">NIST CSF 2.0</span>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-white/[0.05] bg-black/10 px-3 py-2">
-                  <span className="text-[10px] text-gray-500">CIS Controls v8</span>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                </div>
-              </div>
-            </div>
+      </div>
+
+
+      <div
+        className="fixed inset-0 opacity-[0.035] pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+        }}
+      />
+
+
+      <div className="relative z-10 min-h-screen flex flex-col">
+
+        <header className="px-6 py-5 border-b border-white/[0.06]">
+
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
 
             <Link
               href="/"
-              className="flex items-center justify-center gap-2 rounded-xl border border-violet-400/10 bg-violet-500/[0.06] px-4 py-3 text-xs text-violet-300 transition hover:bg-violet-500/[0.1]"
+              className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Start a new assessment
+
+              <ArrowLeft className="w-4 h-4" />
+
+              Back
+
             </Link>
-          </aside>
-        </div>
-      </main>
+
+
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+
+              Secure & Private
+
+            </div>
+
+          </div>
+
+        </header>
+
+
+        <main className="flex-1 flex items-center justify-center px-6 py-16">
+
+          <div className="max-w-4xl w-full">
+
+            <div className="text-center mb-12">
+
+              <div className="flex justify-center mb-5">
+
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-xl shadow-violet-500/20">
+
+                  <Shield className="w-6 h-6 text-white" />
+
+                </div>
+
+              </div>
+
+
+              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+
+                Select your business
+                <span className="text-violet-400">
+                  .
+                </span>
+
+              </h1>
+
+
+              <p className="text-gray-500 mt-4 max-w-xl mx-auto leading-relaxed">
+
+                We'll tailor the security assessment to your industry's specific risks and requirements.
+
+              </p>
+
+            </div>
+
+
+            <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
+
+              {[
+                {
+                  id: 'retail' as Vertical,
+                  label: 'Retail',
+                  desc: 'POS systems, inventory management, payment networks and staff access.',
+                  icon: '🛍️',
+                },
+
+                {
+                  id: 'healthcare_clinic' as Vertical,
+                  label: 'Healthcare Clinic',
+                  desc: 'EHR systems, patient data, HIPAA compliance and device security.',
+                  icon: '🏥',
+                },
+
+                {
+                  id: 'professional_services' as Vertical,
+                  label: 'Professional Services',
+                  desc: 'Client data, cloud applications, IP protection and secure communications.',
+                  icon: '💼',
+                },
+
+              ].map(
+                ({
+                  id,
+                  label,
+                  desc,
+                  icon,
+                }) => (
+
+                  <button
+                    key={id}
+                    onClick={() =>
+                      onSelect(id)
+                    }
+                    className="group text-left p-6 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-violet-500/[0.06] hover:border-violet-400/20 transition-all"
+                  >
+
+                    <div className="text-3xl mb-5">
+                      {icon}
+                    </div>
+
+
+                    <div className="flex items-center justify-between mb-2">
+
+                      <span className="font-semibold text-gray-200 group-hover:text-white">
+                        {label}
+                      </span>
+
+                      <ArrowLeft
+                        className="w-4 h-4 rotate-180 text-gray-700 group-hover:text-violet-400 transition-all"
+                      />
+
+                    </div>
+
+
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      {desc}
+                    </p>
+
+                  </button>
+
+                )
+              )}
+
+            </div>
+
+
+            <div className="flex items-center justify-center gap-5 mt-10 text-[10px] text-gray-700">
+
+              <span className="flex items-center gap-1.5">
+
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
+                NIST CSF 2.0
+
+              </span>
+
+
+              <span>
+                •
+              </span>
+
+
+              <span className="flex items-center gap-1.5">
+
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
+                CIS Controls v8
+
+              </span>
+
+
+              <span>
+                •
+              </span>
+
+
+              <span>
+                ~10 minutes
+              </span>
+
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
     </div>
-  </div>
-);
+  );
+}
+
+
+/* ============================================================
+   MAIN PROPS
+   ============================================================ */
+
+interface ChatInterfaceProps {
+  initialVertical?: Vertical;
+}
+
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
+
+export default function ChatInterface({
+  initialVertical,
+}: ChatInterfaceProps) {
+
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([]);
+
+  const [input, setInput] =
+    useState('');
+
+  const [isLoading, setIsLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [vertical, setVertical] =
+    useState<Vertical | null>(
+      initialVertical || null
+    );
+
+  const [scorecard, setScorecard] =
+    useState<ScorecardResponse | null>(
+      null
+    );
+
+  const [interviewComplete, setInterviewComplete] =
+    useState(false);
+
+  const [sessionId] =
+    useState(() =>
+      generateSessionId()
+    );
+
+  const prevMsgCountRef =
+    useRef(0);
+
+  const inputRef =
+    useRef<HTMLTextAreaElement>(null);
+
+
+  /* ==========================================================
+     INITIALIZE ASSESSMENT
+     ========================================================== */
+
+  const handleVerticalSelect = useCallback(
+    (selectedVertical: Vertical) => {
+
+      setVertical(
+        selectedVertical
+      );
+
+      const name =
+        formatVertical(
+          selectedVertical
+        );
+
+      const welcomeMsg =
+        `Sure! Here is your ${name} assessment.`;
+
+      const firstQuestion =
+        FIRST_QUESTIONS[
+          selectedVertical
+        ];
+
+      setMessages([
+        {
+          role: 'user',
+          content:
+            `I want an assessment for ${name}`,
+        },
+
+        {
+          role: 'assistant',
+          content:
+            welcomeMsg,
+        },
+
+        {
+          role: 'assistant',
+          content:
+            firstQuestion,
+        },
+      ]);
+
+    },
+    []
+  );
+
+
+  /* ==========================================================
+     AUTO INITIALIZE FROM HOMEPAGE
+     ========================================================== */
+
+  useEffect(() => {
+
+    if (
+      initialVertical &&
+      messages.length === 0 &&
+      !interviewComplete
+    ) {
+
+      handleVerticalSelect(
+        initialVertical
+      );
+
+    }
+
+  }, [
+    initialVertical,
+    messages.length,
+    interviewComplete,
+    handleVerticalSelect,
+  ]);
+
+
+  /* ==========================================================
+     MESSAGE SOUND
+     ========================================================== */
+
+  useEffect(() => {
+
+    if (
+      messages.length >
+      prevMsgCountRef.current
+    ) {
+
+      const lastMsg =
+        messages[
+          messages.length - 1
+        ];
+
+      if (
+        lastMsg?.role ===
+        'assistant'
+      ) {
+
+        playNotificationSound();
+
+      }
+
+    }
+
+    prevMsgCountRef.current =
+      messages.length;
+
+  }, [messages]);
+
+
+  /* ==========================================================
+     FOCUS INPUT
+     ========================================================== */
+
+  useEffect(() => {
+
+    if (!interviewComplete) {
+
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+
+    }
+
+  }, [
+    messages,
+    interviewComplete,
+  ]);
+
+
+  /* ==========================================================
+     SUBMIT MESSAGE
+     ========================================================== */
+
+  const handleSubmit = async (
+    e: React.FormEvent
+  ) => {
+
+    e.preventDefault();
+
+    if (
+      !input.trim() ||
+      isLoading
+    ) {
+      return;
+    }
+
+
+    const userMessage =
+      input.trim();
+
+
+    setInput('');
+
+    setError(null);
+
+    setIsLoading(true);
+
+
+    const newMessages = [
+      ...messages,
+
+      {
+        role: 'user' as const,
+        content: userMessage,
+      },
+    ];
+
+
+    setMessages(
+      newMessages
+    );
+
+
+    try {
+
+      const request: ChatRequest = {
+
+        message:
+          userMessage,
+
+        conversation_history:
+          messages,
+
+        vertical,
+
+        session_id:
+          sessionId,
+
+      };
+
+
+      const response =
+        await sendChatMessage(
+          request
+        );
+
+
+      let sc =
+        response.scorecard;
+
+
+      /*
+       * FALLBACK:
+       * Parse scorecard if backend
+       * returned it as JSON text.
+       */
+
+      if (
+        !sc &&
+        response.response
+      ) {
+
+        try {
+
+          let raw =
+            response.response.trim();
+
+
+          if (
+            raw.startsWith('```')
+          ) {
+
+            raw =
+              raw
+                .replace(
+                  /^```(?:json)?\s*/i,
+                  ''
+                )
+                .replace(
+                  /\s*```$/,
+                  ''
+                )
+                .trim();
+
+          }
+
+
+          if (
+            raw.startsWith('{')
+          ) {
+
+            const parsed =
+              JSON.parse(raw);
+
+
+            if (
+              parsed.overall_grade &&
+              parsed.sub_categories
+            ) {
+
+              sc =
+                parsed as ScorecardResponse;
+
+            }
+
+          }
+
+        } catch {}
+
+      }
+
+
+      /* ======================================================
+         SCORECARD RECEIVED
+         ====================================================== */
+
+      if (sc) {
+
+        setScorecard(sc);
+
+        setInterviewComplete(
+          true
+        );
+
+        setVertical(
+          sc.vertical
+        );
+
+      }
+
+
+      /* ======================================================
+         NORMAL CHAT RESPONSE
+         ====================================================== */
+
+      else {
+
+        setMessages(
+          prev => [
+            ...prev,
+
+            {
+              role: 'assistant',
+              content:
+                stripMarkdown(
+                  response.response
+                ),
+            },
+          ]
+        );
+
+      }
+
+    }
+
+    catch (err) {
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to send message'
+      );
+
+
+      setMessages(
+        prev =>
+          prev.slice(
+            0,
+            -1
+          )
+      );
+
+    }
+
+    finally {
+
+      setIsLoading(false);
+
+    }
+
+  };
+
+
+  /* ==========================================================
+     NEW ASSESSMENT
+     ========================================================== */
+
+  const handleRestart = () => {
+
+    window.location.href =
+      '/';
+
+  };
+
+
+  /* ==========================================================
+     DOWNLOAD PDF
+     ========================================================== */
+
+  const handleDownloadPDF =
+    async () => {
+
+      if (!scorecard) {
+        return;
+      }
+
+      try {
+
+        await exportScorecardToPDF(
+          scorecard
+        );
+
+      } catch {
+
+        setError(
+          'Failed to generate PDF'
+        );
+
+      }
+
+    };
+
+
+  /* ==========================================================
+     VERTICAL PICKER
+     ========================================================== */
+
+  if (
+    !vertical &&
+    !interviewComplete
+  ) {
+
+    return (
+      <VerticalPicker
+        onSelect={
+          handleVerticalSelect
+        }
+      />
+    );
+
+  }
+
+
+  /* ==========================================================
+     SCORECARD
+     ========================================================== */
+
+  if (
+    interviewComplete &&
+    scorecard
+  ) {
+
+    return (
+      <div className="min-h-screen bg-[#05040b]">
+
+        <ScorecardView
+          scorecard={
+            scorecard
+          }
+          onRestart={
+            handleRestart
+          }
+          onDownloadPDF={
+            handleDownloadPDF
+          }
+        />
+
+      </div>
+    );
+
+  }
+
+
+  /* ==========================================================
+     ASSESSMENT CALCULATIONS
+     ========================================================== */
+
+  const userMessages =
+    messages.filter(
+      msg =>
+        msg.role ===
+        'user'
+    );
+
+
+  /*
+   * The first user message is simply:
+   * "I want an assessment for..."
+   *
+   * So it should NOT count as an answered
+   * assessment question.
+   */
+
+  const answeredQuestions =
+    Math.max(
+      0,
+      userMessages.length - 1
+    );
+
+
+  const estimatedQuestions = 10;
+
+
+  const progress =
+    Math.min(
+      100,
+      Math.round(
+        (answeredQuestions /
+          estimatedQuestions) *
+          100
+      )
+    );
+
+
+  /* ==========================================================
+     MAIN ASSESSMENT UI
+     ========================================================== */
+
+  return (
+
+    <div className="min-h-screen bg-[#05040b] text-white relative">
+
+
+      {/* ======================================================
+          BACKGROUND
+          ====================================================== */}
+
+      <div className="fixed inset-0 pointer-events-none">
+
+        <div className="absolute top-[-220px] left-[35%] w-[700px] h-[500px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
+
+        <div className="absolute top-[45%] right-[-200px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.05] blur-[170px]" />
+
+        <div className="absolute bottom-[-200px] left-[10%] w-[500px] h-[400px] rounded-full bg-fuchsia-700/[0.04] blur-[170px]" />
+
+      </div>
+
+
+      {/* ======================================================
+          GRID
+          ====================================================== */}
+
+      <div
+        className="fixed inset-0 opacity-[0.028] pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
+          backgroundSize:
+            '48px 48px',
+        }}
+      />
+
+
+      {/* ======================================================
+          PAGE
+          ====================================================== */
+
+      <div className="relative z-10 flex min-h-screen">
+
+
+        {/* ====================================================
+            LEFT SIDEBAR
+            ==================================================== */}
+
+        <aside className="hidden lg:flex w-60 flex-shrink-0 border-r border-white/[0.06] bg-[#07060d]/90 flex-col sticky top-0 h-screen">
+
+
+          {/* BRAND */}
+
+          <div className="px-5 py-5 border-b border-white/[0.06]">
+
+            <Link
+              href="/"
+              className="flex items-center gap-3"
+            >
+
+              <div className="relative">
+
+                <div className="absolute inset-0 bg-violet-500/20 blur-xl rounded-full" />
+
+                <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
+
+                  <Shield className="w-4 h-4 text-white" />
+
+                </div>
+
+              </div>
+
+
+              <div>
+
+                <div className="text-sm font-semibold text-white">
+                  CyberCISO
+                </div>
+
+                <div className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                  AI security advisor
+                </div>
+
+              </div>
+
+            </Link>
+
+          </div>
+
+
+          {/* NEW ASSESSMENT */}
+
+          <div className="px-4 py-4">
+
+            <Link
+              href="/"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-violet-400/10 bg-violet-500/[0.07] text-violet-300 text-xs hover:bg-violet-500/[0.12] transition"
+            >
+
+              <Sparkles className="w-3.5 h-3.5" />
+
+              New Assessment
+
+            </Link>
+
+          </div>
+
+
+          {/* NAV */}
+
+          <div className="px-3">
+
+            <p className="px-3 mb-2 text-[8px] uppercase tracking-[0.2em] text-gray-700">
+              Assessment
+            </p>
+
+
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/[0.045] text-gray-200">
+
+              <Activity className="w-3.5 h-3.5 text-violet-400" />
+
+              <span className="text-xs">
+                Live assessment
+              </span>
+
+            </div>
+
+          </div>
+
+
+          {/* CURRENT */}
+
+          <div className="px-4 mt-6">
+
+            <p className="px-2 mb-2 text-[8px] uppercase tracking-[0.2em] text-gray-700">
+              Current
+            </p>
+
+
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+
+              <div className="flex items-center gap-2">
+
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.7)]" />
+
+                <span className="text-xs text-gray-300">
+                  {vertical
+                    ? formatVertical(
+                        vertical
+                      )
+                    : 'Assessment'}
+                </span>
+
+              </div>
+
+
+              <p className="text-[9px] text-gray-700 mt-1.5 ml-3.5">
+                Assessment in progress
+              </p>
+
+            </div>
+
+          </div>
+
+
+          {/* BOTTOM */}
+
+          <div className="mt-auto p-4">
+
+            <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-3">
+
+              <div className="flex items-center gap-2">
+
+                <Lock className="w-3.5 h-3.5 text-emerald-400" />
+
+                <span className="text-[9px] text-gray-500">
+                  Secure session
+                </span>
+
+              </div>
+
+
+              <p className="text-[8px] text-emerald-400/60 mt-1 ml-5">
+                Protected locally
+              </p>
+
+            </div>
+
+          </div>
+
+        </aside>
+
+
+        {/* ====================================================
+            MAIN CONTENT
+            ==================================================== */}
+
+        <main className="flex-1 min-w-0">
+
+
+          {/* ==================================================
+              TOP HEADER
+              ================================================== */}
+
+          <header className="sticky top-0 z-30 h-16 border-b border-white/[0.06] bg-[#07060d]/85 backdrop-blur-xl">
+
+            <div className="h-full px-5 lg:px-7 flex items-center justify-between">
+
+
+              <div className="flex items-center gap-3">
+
+                <div className="lg:hidden w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
+
+                  <Shield className="w-4 h-4 text-white" />
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-gray-600">
+                    Security operations
+                  </p>
+
+                  <h1 className="text-sm font-semibold text-gray-200">
+                    Assessment overview
+                  </h1>
+
+                </div>
+
+              </div>
+
+
+              <div className="flex items-center gap-3">
+
+
+                {vertical && (
+
+                  <span className="hidden sm:block px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[10px] text-violet-300">
+
+                    {formatVertical(
+                      vertical
+                    )}
+
+                  </span>
+
+                )}
+
+
+                <div className="flex items-center gap-2 text-[10px] text-gray-600">
+
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,.8)]" />
+
+                  CyberCISO AI is analyzing
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </header>
+
+
+          {/* ==================================================
+              PAGE CONTENT
+
+              IMPORTANT:
+              NO overflow-y-auto HERE.
+              The entire browser page scrolls.
+              ================================================== */}
+
+          <div className="px-4 sm:px-6 lg:px-7 py-6 max-w-[1500px] mx-auto">
+
+
+            {/* =================================================
+                STAT CARDS
+                ================================================= */}
+
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+
+
+              {/* QUESTIONS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Questions
+                    </p>
+
+                    <p className="text-xl font-semibold text-gray-200 mt-1">
+                      {answeredQuestions}
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      answered
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
+
+                    <Zap className="w-3.5 h-3.5 text-violet-400" />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* PROGRESS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Progress
+                    </p>
+
+                    <p className="text-xl font-semibold text-gray-200 mt-1">
+                      {progress}%
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      assessment progress
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/[0.08] border border-blue-400/10 flex items-center justify-center">
+
+                    <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* DOMAINS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Domains
+                    </p>
+
+                    <p className="text-xl font-semibold text-gray-200 mt-1">
+                      5
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      security areas
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/[0.08] border border-fuchsia-400/10 flex items-center justify-center">
+
+                    <CircleDot className="w-3.5 h-3.5 text-fuchsia-400" />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* FRAMEWORKS */}
+
+              <div className="rounded-xl border border-white/[0.07] bg-[#0a0911]/80 p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+
+                    <p className="text-[8px] uppercase tracking-[0.18em] text-gray-700">
+                      Frameworks
+                    </p>
+
+                    <p className="text-sm font-semibold text-gray-200 mt-2">
+                      NIST + CIS
+                    </p>
+
+                    <p className="text-[8px] text-gray-700">
+                      active controls
+                    </p>
+
+                  </div>
+
+
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/[0.08] border border-emerald-400/10 flex items-center justify-center">
+
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* =================================================
+                MAIN GRID
+                ================================================= */}
+
+            <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-4">
+
+
+              {/* =================================================
+                  CHAT
+                  ================================================= */}
+
+              <section className="rounded-2xl border border-white/[0.08] bg-[#090811]/90 overflow-hidden">
+
+
+                {/* CHAT HEADER */}
+
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+
+                  <div className="flex items-center gap-3">
+
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+
+                      <Shield className="w-4 h-4 text-white" />
+
+                    </div>
+
+
+                    <div>
+
+                      <p className="text-xs font-semibold text-gray-200">
+                        CyberCISO AI
+                      </p>
+
+                      <p className="text-[8px] text-gray-600">
+                        Online • Security analyst
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  <div className="flex items-center gap-2">
+
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+
+                    <span className="text-[9px] text-gray-600">
+                      Live
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    MESSAGES
+
+                    NO overflow-y-auto.
+                    NO fixed height.
+                    NO internal scrollbar.
+
+                    The browser/page handles scrolling.
+                    ================================================= */}
+
+                <div className="px-5 py-6 space-y-5">
+
+
+                  {messages.map(
+                    (
+                      msg,
+                      idx
+                    ) => (
+
+                      <div
+                        key={idx}
+                        className={cn(
+                          'flex gap-3 message-enter',
+                          msg.role ===
+                            'user' &&
+                            'justify-end'
+                        )}
+                      >
+
+
+                        {/* AI ICON */}
+
+                        {msg.role ===
+                          'assistant' && (
+
+                          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center shadow-md shadow-violet-500/20 mt-0.5">
+
+                            <Shield className="w-4 h-4 text-white" />
+
+                          </div>
+
+                        )}
+
+
+                        {/* MESSAGE */}
+
+                        <div
+                          className={cn(
+                            'max-w-[85%] rounded-2xl px-4 py-3',
+                            msg.role ===
+                              'user'
+
+                              ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white rounded-br-md shadow-lg shadow-violet-500/10'
+
+                              : 'bg-white/[0.035] text-gray-300 border border-white/[0.07] rounded-bl-md'
+                          )}
+                        >
+
+                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+
+                            {msg.content}
+
+                          </p>
+
+                        </div>
+
+                      </div>
+
+                    )
+                  )}
+
+
+                  {/* TYPING */}
+
+                  {isLoading && (
+                    <TypingIndicator />
+                  )}
+
+
+                  {/* ERROR */}
+
+                  {error && (
+
+                    <div className="flex justify-center">
+
+                      <div className="px-4 py-3 rounded-xl border border-red-400/10 bg-red-500/[0.05] text-red-300 text-xs">
+
+                        {error}
+
+                      </div>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+
+                {/* =================================================
+                    INPUT
+
+                    This is NOT a scroll container.
+                    ================================================= */}
+
+                <div className="px-5 pb-5">
+
+                  <form
+                    onSubmit={
+                      handleSubmit
+                    }
+                    className="rounded-xl border border-violet-400/10 bg-[#0d0b16] p-2.5 focus-within:border-violet-400/20 transition"
+                  >
+
+                    <div className="flex items-end gap-2">
+
+                      <textarea
+                        ref={
+                          inputRef
+                        }
+                        value={
+                          input
+                        }
+                        onChange={
+                          e =>
+                            setInput(
+                              e.target.value
+                            )
+                        }
+                        onKeyDown={(
+                          e: KeyboardEvent<HTMLTextAreaElement>
+                        ) => {
+
+                          if (
+                            e.key ===
+                              'Enter' &&
+                            !e.shiftKey
+                          ) {
+
+                            e.preventDefault();
+
+                            handleSubmit(
+                              e
+                            );
+
+                          }
+
+                        }}
+                        placeholder="Tell CyberCISO about your security..."
+                        disabled={
+                          isLoading
+                        }
+                        rows={1}
+                        className="flex-1 min-h-[44px] max-h-32 bg-transparent px-3 py-3 text-sm text-gray-200 placeholder:text-gray-700 focus:outline-none resize-none"
+                        aria-label="Chat input"
+                      />
+
+
+                      <button
+                        type="submit"
+                        disabled={
+                          !input.trim() ||
+                          isLoading
+                        }
+                        className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0',
+
+                          input.trim() &&
+                            !isLoading
+
+                            ? 'bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-lg shadow-violet-500/20 hover:scale-[1.03]'
+
+                            : 'bg-white/[0.04] text-gray-700 cursor-not-allowed'
+                        )}
+                        aria-label="Send message"
+                      >
+
+                        <Send className="w-4 h-4" />
+
+                      </button>
+
+                    </div>
+
+
+                    <div className="flex items-center justify-between px-3 pb-1 pt-1">
+
+                      <span className="text-[8px] text-gray-700">
+                        Enter to send • Shift+Enter for new line
+                      </span>
+
+
+                      <span className="flex items-center gap-1.5 text-[8px] text-gray-700">
+
+                        <Lock className="w-2.5 h-2.5" />
+
+                        Session protected
+
+                      </span>
+
+                    </div>
+
+                  </form>
+
+                </div>
+
+              </section>
+
+
+              {/* =================================================
+                  RIGHT SIDEBAR
+                  ================================================= */}
+
+              <aside className="space-y-4">
+
+
+                {/* =================================================
+                    PROGRESS
+                    ================================================= */}
+
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
+
+                  <div className="flex items-center justify-between mb-1">
+
+                    <p className="text-xs font-medium text-gray-300">
+                      Assessment progress
+                    </p>
+
+                    <span className="text-xs font-semibold text-violet-300">
+                      {progress}%
+                    </span>
+
+                  </div>
+
+
+                  <p className="text-[8px] text-gray-700 mb-3">
+                    Adaptive interview
+                  </p>
+
+
+                  <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                      style={{
+                        width:
+                          `${Math.max(
+                            progress,
+                            3
+                          )}%`,
+                      }}
+                    />
+
+                  </div>
+
+
+                  <div className="flex justify-between mt-2 text-[8px] text-gray-700">
+
+                    <span>
+                      {answeredQuestions} answered
+                    </span>
+
+                    <span>
+                      adaptive
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    SECURITY COVERAGE
+                    ================================================= */}
+
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
+
+                  <div className="flex items-center justify-between mb-1">
+
+                    <p className="text-xs font-medium text-gray-300">
+                      Security coverage
+                    </p>
+
+                    <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+
+                  </div>
+
+
+                  <p className="text-[8px] text-gray-700 mb-4">
+                    Live assessment areas
+                  </p>
+
+
+                  <div className="space-y-3">
+
+                    {SECURITY_DOMAINS.map(
+                      (
+                        domain,
+                        index
+                      ) => {
+
+                        const Icon =
+                          domain.icon;
+
+
+                        /*
+                         * First domain becomes active
+                         * after the assessment begins.
+                         *
+                         * Later domains unlock as
+                         * questions progress.
+                         */
+
+                        const domainProgress =
+                          Math.min(
+                            100,
+                            Math.max(
+                              3,
+                              progress -
+                                index *
+                                  18
+                            )
+                          );
+
+
+                        const active =
+                          progress >=
+                          index *
+                            18;
+
+
+                        return (
+
+                          <div
+                            key={
+                              domain.key
+                            }
+                          >
+
+                            <div className="flex items-center justify-between mb-1">
+
+                              <div className="flex items-center gap-2">
+
+                                <Icon
+                                  className={cn(
+                                    'w-3 h-3',
+                                    active
+                                      ? 'text-violet-400'
+                                      : 'text-gray-700'
+                                  )}
+                                />
+
+                                <span
+                                  className={cn(
+                                    'text-[9px]',
+                                    active
+                                      ? 'text-gray-400'
+                                      : 'text-gray-700'
+                                  )}
+                                >
+                                  {
+                                    domain.short
+                                  }
+                                </span>
+
+                              </div>
+
+
+                              <span
+                                className={cn(
+                                  'text-[8px]',
+                                  active
+                                    ? 'text-violet-400/70'
+                                    : 'text-gray-800'
+                                )}
+                              >
+
+                                {active
+                                  ? `${domainProgress}%`
+                                  : 'pending'}
+
+                              </span>
+
+                            </div>
+
+
+                            <div className="h-1 rounded-full bg-white/[0.04] overflow-hidden">
+
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                                style={{
+                                  width:
+                                    `${domainProgress}%`,
+                                }}
+                              />
+
+                            </div>
+
+                          </div>
+
+                        );
+
+                      }
+                    )}
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    ASSESSMENT ACTIVITY
+                    ================================================= */}
+
+                <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
+
+                  <div className="flex items-center justify-between mb-1">
+
+                    <p className="text-xs font-medium text-gray-300">
+                      Assessment activity
+                    </p>
+
+                    <Activity className="w-3.5 h-3.5 text-violet-400" />
+
+                  </div>
+
+
+                  <p className="text-[8px] text-gray-700 mb-4">
+                    Security areas being reviewed
+                  </p>
+
+
+                  <div className="space-y-3">
+
+                    {SECURITY_DOMAINS.map(
+                      (
+                        domain,
+                        index
+                      ) => {
+
+                        const active =
+                          index ===
+                          Math.min(
+                            4,
+                            Math.floor(
+                              answeredQuestions /
+                                2
+                            )
+                          );
+
+
+                        return (
+
+                          <div
+                            key={
+                              domain.key
+                            }
+                            className="flex items-center justify-between"
+                          >
+
+                            <div className="flex items-center gap-2">
+
+                              <span
+                                className={cn(
+                                  'w-1.5 h-1.5 rounded-full border',
+                                  active
+                                    ? 'bg-violet-400 border-violet-300 shadow-[0_0_6px_rgba(167,139,250,.8)]'
+                                    : 'border-gray-700'
+                                )}
+                              />
+
+                              <span
+                                className={cn(
+                                  'text-[9px]',
+                                  active
+                                    ? 'text-gray-300'
+                                    : 'text-gray-700'
+                                )}
+                              >
+                                {
+                                  domain.label
+                                }
+                              </span>
+
+                            </div>
+
+
+                            <span
+                              className={cn(
+                                'text-[8px]',
+                                active
+                                  ? 'text-violet-400/70'
+                                  : 'text-gray-800'
+                              )}
+                            >
+
+                              {active
+                                ? 'active'
+                                : 'pending'}
+
+                            </span>
+
+                          </div>
+
+                        );
+
+                      }
+                    )}
+
+                  </div>
+
+                </div>
+
+
+                {/* =================================================
+                    NO FRAMEWORK COVERAGE CARD HERE
+                    ================================================= */}
+
+              </aside>
+
+            </div>
+
+
+            {/* =================================================
+                BOTTOM STATUS
+                ================================================= */}
+
+            <div className="grid md:grid-cols-3 gap-3 mt-4">
+
+
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+
+                <div className="w-7 h-7 rounded-lg bg-violet-500/[0.07] flex items-center justify-center">
+
+                  <Sparkles className="w-3 h-3 text-violet-400" />
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                    AI status
+                  </p>
+
+                  <p className="text-[9px] text-gray-500">
+                    Adaptive analysis active
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+
+                <div className="w-7 h-7 rounded-lg bg-blue-500/[0.07] flex items-center justify-center">
+
+                  <Lock className="w-3 h-3 text-blue-400" />
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                    Privacy
+                  </p>
+
+                  <p className="text-[9px] text-gray-500">
+                    Session data protected
+                  </p>
+
+                </div>
+
+              </div>
+
+
+              <div className="rounded-xl border border-white/[0.06] bg-[#090811]/70 px-4 py-3 flex items-center gap-3">
+
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/[0.07] flex items-center justify-center">
+
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+
+                </div>
+
+
+                <div>
+
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gray-700">
+                    Standards
+                  </p>
+
+                  <p className="text-[9px] text-gray-500">
+                    NIST + CIS aligned
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+          </div>
+
+        </main>
+
+      </div>
+
+    </div>
+  );
+}
