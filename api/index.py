@@ -242,7 +242,7 @@ async def chat(req: ChatRequest):
     qs = MOCK_QUESTIONS.get(v, MOCK_QUESTIONS["retail"])
     # If all mock questions have been answered, finish the assessment
     if user_turns >= len(qs):
-        return ChatResponse(
+    return ChatResponse(
             response="",
             scorecard=mock_scorecard(vertical),
             interview_complete=True
