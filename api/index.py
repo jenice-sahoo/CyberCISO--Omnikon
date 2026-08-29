@@ -247,3 +247,5 @@ async def chat(req: ChatRequest):
     idx = min(user_turns, len(qs)-1)
     # if user just answered question idx-1, ask idx
     return ChatResponse(response=qs[idx], interview_complete=False)
+
+# Vercel deployment test
