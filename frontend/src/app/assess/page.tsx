@@ -7,19 +7,24 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+import { useSearchParams } from 'next/navigation';
+
 import ChatInterface from '@/components/ChatInterface';
+
+type Vertical =
+  | 'retail'
+  | 'healthcare_clinic'
+  | 'professional_services';
 
 function LoadingScreen() {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05040b] text-white">
-      {/* Background glow */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-1/2 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600/[0.12] blur-[160px]" />
 
         <div className="absolute bottom-[-120px] left-[-80px] h-[300px] w-[300px] rounded-full bg-blue-600/[0.08] blur-[130px]" />
       </div>
 
-      {/* Grid */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035]"
         style={{
@@ -56,10 +61,41 @@ function LoadingScreen() {
   );
 }
 
+function AssessmentContent() {
+  const searchParams =
+    useSearchParams();
+
+  const verticalParam =
+    searchParams.get('vertical');
+
+  const validVerticals: Vertical[] = [
+    'retail',
+    'healthcare_clinic',
+    'professional_services',
+  ];
+
+  const vertical =
+    validVerticals.includes(
+      verticalParam as Vertical
+    )
+      ? (verticalParam as Vertical)
+      : undefined;
+
+  return (
+    <ChatInterface
+      initialVertical={vertical}
+    />
+  );
+}
+
 export default function AssessPage() {
   return (
-    <Suspense fallback={<LoadingScreen />}>
-      <ChatInterface />
+    <Suspense
+      fallback={
+        <LoadingScreen />
+      }
+    >
+      <AssessmentContent />
     </Suspense>
   );
 }
