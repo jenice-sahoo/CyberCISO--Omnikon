@@ -1,9 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 from enum import Enum
+import os
+import json
 import re
+import urllib.request
+import urllib.error
 
 
 # ============================================================
@@ -35,942 +39,2315 @@ class ChatResponse(BaseModel):
 
 
 # ============================================================
-# ASSESSMENT QUESTION BANK
+# CONFIGURATION
 # ============================================================
 
-MOCK_QUESTIONS = {
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+
+GROQ_MODEL = os.environ.get(
+    "GROQ_MODEL",
+    "llama-3.3-70b-versatile"
+)
+
+GROQ_URL = (
+    "https://api.groq.com/openai/v1/chat/completions"
+)
+
+MIN_CORE_QUESTIONS = 15
+MAX_ADAPTIVE_QUESTIONS = 4
+MAX_TOTAL_QUESTIONS = (
+    MIN_CORE_QUESTIONS +
+    MAX_ADAPTIVE_QUESTIONS
+)
+
+
+# ============================================================
+# QUESTION HELPERS
+# ============================================================
+
+def core_question(
+    qid: str,
+    domain: str,
+    phase: str,
+    text: str
+) -> dict:
+    return {
+        "id": qid,
+        "domain": domain,
+        "phase": phase,
+        "text": text,
+        "adaptive": False,
+    }
+
+
+def adaptive_question(
+    qid: str,
+    domain: str,
+    phase: str,
+    text: str
+) -> dict:
+    return {
+        "id": qid,
+        "domain": domain,
+        "phase": phase,
+        "text": text,
+        "adaptive": True,
+    }
+
+
+# ============================================================
+# CORE QUESTIONS
+#
+# EXACTLY 15 CORE QUESTIONS PER VERTICAL
+# ============================================================
+
+CORE_QUESTIONS: Dict[str, List[dict]] = {
+
+    # ========================================================
+    # RETAIL
+    # ========================================================
+
     "retail": [
-        "How many employees access your point-of-sale systems and inventory databases?",
-        "Do you use multi-factor authentication (MFA) for all remote access and administrative accounts?",
-        "How frequently do you back up critical business data?",
-        "Do you have a guest Wi-Fi network separated from your payment processing network?",
-        "Have you conducted phishing awareness training in the last 12 months?",
-        "Do you have an incident response plan for a data breach?",
+
+        core_question(
+            "retail_org_size",
+            "organization",
+            "Organization",
+            "How many employees access your point-of-sale systems and inventory databases?"
+        ),
+
+        core_question(
+            "retail_data",
+            "organization",
+            "Organization",
+            "What sensitive or regulated information does your business handle, such as payment card data, customer information, employee data, or supplier information?"
+        ),
+
+        core_question(
+            "retail_critical",
+            "organization",
+            "Organization",
+            "Which systems are most critical to keeping your business operating, such as point-of-sale, inventory, accounting, e-commerce, or cloud systems?"
+        ),
+
+        core_question(
+            "retail_mfa",
+            "access_control",
+            "Identity & Access",
+            "Do you use multi-factor authentication (MFA) for administrative accounts, remote access, and important cloud services?"
+        ),
+
+        core_question(
+            "retail_lifecycle",
+            "access_control",
+            "Identity & Access",
+            "How are employee accounts created, changed, and removed when someone joins, changes roles, or leaves the company?"
+        ),
+
+        core_question(
+            "retail_privileged",
+            "access_control",
+            "Identity & Access",
+            "Do administrators use separate privileged accounts, and are privileged permissions reviewed regularly?"
+        ),
+
+        core_question(
+            "retail_backup",
+            "data_backup",
+            "Data",
+            "How frequently is critical business data backed up, and where are those backups stored?"
+        ),
+
+        core_question(
+            "retail_restore",
+            "data_backup",
+            "Data",
+            "When was the last time you successfully restored important business data from a backup?"
+        ),
+
+        core_question(
+            "retail_segment",
+            "network_security",
+            "Infrastructure",
+            "Is your payment-processing or point-of-sale environment separated from guest Wi-Fi and other less-trusted devices?"
+        ),
+
+        core_question(
+            "retail_endpoint",
+            "network_security",
+            "Infrastructure",
+            "How are company laptops, desktops, POS devices, and other endpoints protected against malware and unauthorized software?"
+        ),
+
+        core_question(
+            "retail_patch",
+            "network_security",
+            "Infrastructure",
+            "How do you keep operating systems, POS software, routers, and other important systems patched and up to date?"
+        ),
+
+        core_question(
+            "retail_training",
+            "email_phishing",
+            "People",
+            "Do employees receive security awareness training, including guidance on phishing, passwords, and handling customer information?"
+        ),
+
+        core_question(
+            "retail_phishing",
+            "email_phishing",
+            "People",
+            "Have you conducted a phishing simulation or other practical test of employee security awareness in the last 12 months?"
+        ),
+
+        core_question(
+            "retail_ir",
+            "incident_response",
+            "Response",
+            "Do you have a written incident response plan covering what to do if you experience ransomware, a data breach, or a payment-system compromise?"
+        ),
+
+        core_question(
+            "retail_ir_test",
+            "incident_response",
+            "Response",
+            "Has your incident response plan been tested or rehearsed with the people who would actually respond to an incident?"
+        ),
     ],
+
+    # ========================================================
+    # HEALTHCARE
+    # ========================================================
 
     "healthcare_clinic": [
-        "How many staff members access your electronic health records (EHR) system?",
-        "Is access to patient data restricted by role (e.g., front desk vs. clinicians vs. billing)?",
-        "Are EHR backups encrypted and tested for restoration at least quarterly?",
-        "Do you have a business associate agreement (BAA) with all vendors who access PHI?",
-        "How do you secure medical devices connected to your network?",
-        "Do you have a HIPAA breach notification procedure documented and tested?",
+
+        core_question(
+            "health_org_size",
+            "organization",
+            "Organization",
+            "How many staff members access your electronic health records (EHR) system?"
+        ),
+
+        core_question(
+            "health_data",
+            "organization",
+            "Organization",
+            "What types of patient or other sensitive information does your clinic handle, store, or transmit?"
+        ),
+
+        core_question(
+            "health_critical",
+            "organization",
+            "Organization",
+            "Which systems are most critical to patient care and clinic operations, such as your EHR, scheduling, billing, laboratory, imaging, or medical-device systems?"
+        ),
+
+        core_question(
+            "health_mfa",
+            "access_control",
+            "Identity & Access",
+            "Do you use multi-factor authentication (MFA) for administrative accounts, remote access, and important cloud or healthcare systems?"
+        ),
+
+        core_question(
+            "health_role",
+            "access_control",
+            "Identity & Access",
+            "Is access to patient information restricted by job role so that staff only receive the access they need?"
+        ),
+
+        core_question(
+            "health_lifecycle",
+            "access_control",
+            "Identity & Access",
+            "How are staff accounts created, changed, and removed when employees join, change roles, or leave the clinic?"
+        ),
+
+        core_question(
+            "health_backup",
+            "data_backup",
+            "Data",
+            "How frequently are EHR and other critical clinical systems backed up, and are the backups protected from unauthorized access?"
+        ),
+
+        core_question(
+            "health_restore",
+            "data_backup",
+            "Data",
+            "When was the last time your clinic successfully restored patient or operational data from a backup?"
+        ),
+
+        core_question(
+            "health_network",
+            "network_security",
+            "Infrastructure",
+            "Are clinical systems and medical devices separated from guest Wi-Fi and other less-trusted networks?"
+        ),
+
+        core_question(
+            "health_devices",
+            "network_security",
+            "Infrastructure",
+            "How are connected medical devices inventoried, protected, monitored, and kept up to date?"
+        ),
+
+        core_question(
+            "health_patch",
+            "network_security",
+            "Infrastructure",
+            "How do you manage security patches and updates for servers, workstations, network equipment, and medical devices where supported?"
+        ),
+
+        core_question(
+            "health_training",
+            "email_phishing",
+            "People",
+            "Do staff receive security and privacy awareness training covering phishing, passwords, patient information, and safe handling of sensitive data?"
+        ),
+
+        core_question(
+            "health_phishing",
+            "email_phishing",
+            "People",
+            "Have you tested staff resistance to phishing or social engineering during the last 12 months?"
+        ),
+
+        core_question(
+            "health_ir",
+            "incident_response",
+            "Response",
+            "Do you have a documented process for responding to a cybersecurity incident or suspected HIPAA breach?"
+        ),
+
+        core_question(
+            "health_ir_test",
+            "incident_response",
+            "Response",
+            "Has that incident or breach response process been tested or rehearsed with the people responsible for responding?"
+        ),
     ],
 
+    # ========================================================
+    # PROFESSIONAL SERVICES
+    # ========================================================
+
     "professional_services": [
-        "How many team members access client confidential data on a regular basis?",
-        "Do you enforce MFA on all cloud services (Microsoft 365, Google Workspace, CRM)?",
-        "Are client deliverables backed up with version control and offsite replication?",
-        "Do you use email encryption or secure file transfer for sensitive client documents?",
-        "Have you simulated a phishing attack against your staff in the last year?",
-        "Do you have a written incident response plan for client data exposure?",
+
+        core_question(
+            "pro_org_size",
+            "organization",
+            "Organization",
+            "How many team members access client confidential data on a regular basis?"
+        ),
+
+        core_question(
+            "pro_data",
+            "organization",
+            "Organization",
+            "What sensitive information do you handle for clients or your own business, such as confidential documents, financial information, intellectual property, or personal data?"
+        ),
+
+        core_question(
+            "pro_critical",
+            "organization",
+            "Organization",
+            "Which systems are most critical to delivering your services, such as Microsoft 365, Google Workspace, CRM, accounting, project management, or file-sharing platforms?"
+        ),
+
+        core_question(
+            "pro_mfa",
+            "access_control",
+            "Identity & Access",
+            "Do you enforce multi-factor authentication (MFA) for cloud services, administrative accounts, remote access, and other important systems?"
+        ),
+
+        core_question(
+            "pro_lifecycle",
+            "access_control",
+            "Identity & Access",
+            "How are employee and contractor accounts created, changed, and removed when someone joins, changes roles, or leaves?"
+        ),
+
+        core_question(
+            "pro_privileged",
+            "access_control",
+            "Identity & Access",
+            "Do administrators use separate privileged accounts, and are privileged permissions reviewed periodically?"
+        ),
+
+        core_question(
+            "pro_backup",
+            "data_backup",
+            "Data",
+            "How frequently are critical client and business files backed up, and are backups stored separately from your primary systems?"
+        ),
+
+        core_question(
+            "pro_restore",
+            "data_backup",
+            "Data",
+            "When was the last time you successfully restored an important client or business file from a backup?"
+        ),
+
+        core_question(
+            "pro_network",
+            "network_security",
+            "Infrastructure",
+            "How is access to your company network and cloud services protected when employees work remotely or from unmanaged networks?"
+        ),
+
+        core_question(
+            "pro_endpoint",
+            "network_security",
+            "Infrastructure",
+            "How are employee laptops and other endpoints protected against malware, unauthorized software, and loss or theft?"
+        ),
+
+        core_question(
+            "pro_patch",
+            "network_security",
+            "Infrastructure",
+            "How do you ensure operating systems, applications, network devices, and cloud services are kept up to date?"
+        ),
+
+        core_question(
+            "pro_training",
+            "email_phishing",
+            "People",
+            "Do employees receive security awareness training covering phishing, passwords, confidential client information, and secure file sharing?"
+        ),
+
+        core_question(
+            "pro_phishing",
+            "email_phishing",
+            "People",
+            "Have you conducted a phishing simulation or other practical social-engineering test during the last 12 months?"
+        ),
+
+        core_question(
+            "pro_ir",
+            "incident_response",
+            "Response",
+            "Do you have a written incident response plan for situations such as ransomware, account compromise, or exposure of client data?"
+        ),
+
+        core_question(
+            "pro_ir_test",
+            "incident_response",
+            "Response",
+            "Has your incident response plan been tested or rehearsed with the people responsible for responding?"
+        ),
     ],
 }
 
 
 # ============================================================
-# QUESTION -> CATEGORY MAPPING
+# ADAPTIVE FOLLOW-UP QUESTIONS
 # ============================================================
 
-QUESTION_CATEGORIES = {
+ADAPTIVE_QUESTIONS: Dict[str, List[dict]] = {
+
+    # ========================================================
+    # RETAIL FOLLOW-UPS
+    # ========================================================
+
     "retail": [
-        "access_control",
-        "access_control",
-        "data_backup",
-        "network_security",
-        "email_phishing",
-        "incident_response",
+
+        adaptive_question(
+            "ret_mfa_admin",
+            "access_control",
+            "Identity & Access",
+            "Which accounts currently have administrative access to your POS, inventory, payment, or other critical systems?"
+        ),
+
+        adaptive_question(
+            "ret_mfa_shared",
+            "access_control",
+            "Identity & Access",
+            "Are any administrative or important system accounts shared between employees, or does each person have a unique account?"
+        ),
+
+        adaptive_question(
+            "ret_mfa_scope",
+            "access_control",
+            "Identity & Access",
+            "Are there any important systems or remote-access methods where MFA is not currently enforced?"
+        ),
+
+        adaptive_question(
+            "ret_backup_test",
+            "data_backup",
+            "Data",
+            "How often do you test restoring data from your backups, and what happened during the most recent restore test?"
+        ),
+
+        adaptive_question(
+            "ret_backup_offline",
+            "data_backup",
+            "Data",
+            "Are any backup copies isolated or otherwise protected so that ransomware affecting production systems cannot also encrypt or delete the backups?"
+        ),
+
+        adaptive_question(
+            "ret_network_flat",
+            "network_security",
+            "Infrastructure",
+            "What devices or systems can communicate directly with the payment-processing or POS network?"
+        ),
+
+        adaptive_question(
+            "ret_patch_gap",
+            "network_security",
+            "Infrastructure",
+            "Are there any POS devices, routers, servers, or other critical systems that are currently behind on security patches?"
+        ),
+
+        adaptive_question(
+            "ret_phish_result",
+            "email_phishing",
+            "People",
+            "What were the results of your most recent phishing or security-awareness test, and what did you do for employees who struggled?"
+        ),
+
+        adaptive_question(
+            "ret_ir_contact",
+            "incident_response",
+            "Response",
+            "If your POS or customer-data systems were compromised tonight, who would be responsible for leading the response and who would you contact first?"
+        ),
+
+        adaptive_question(
+            "ret_vendor",
+            "third_party",
+            "Third Parties",
+            "Do any vendors or service providers have access to your POS, payment, inventory, or customer systems, and how do you assess their security?"
+        ),
     ],
+
+    # ========================================================
+    # HEALTHCARE FOLLOW-UPS
+    # ========================================================
 
     "healthcare_clinic": [
-        "access_control",
-        "access_control",
-        "data_backup",
-        "network_security",
-        "network_security",
-        "incident_response",
+
+        adaptive_question(
+            "health_mfa_admin",
+            "access_control",
+            "Identity & Access",
+            "Which staff or vendor accounts have administrative access to your EHR or other systems containing patient information?"
+        ),
+
+        adaptive_question(
+            "health_shared",
+            "access_control",
+            "Identity & Access",
+            "Are any EHR, workstation, or administrative accounts shared between staff, or does each person have a unique account?"
+        ),
+
+        adaptive_question(
+            "health_role_gap",
+            "access_control",
+            "Identity & Access",
+            "When was the last time you reviewed staff access to patient information, and what happens when someone changes roles?"
+        ),
+
+        adaptive_question(
+            "health_backup_test",
+            "data_backup",
+            "Data",
+            "How often do you test restoring EHR or other critical data from backup, and when was the last successful restore?"
+        ),
+
+        adaptive_question(
+            "health_backup_isolation",
+            "data_backup",
+            "Data",
+            "Are backup copies isolated from the systems they protect so that ransomware or an administrator compromise cannot easily destroy them?"
+        ),
+
+        adaptive_question(
+            "health_device_gap",
+            "network_security",
+            "Infrastructure",
+            "Are there any medical devices or connected clinical systems that cannot currently receive security updates or are not centrally monitored?"
+        ),
+
+        adaptive_question(
+            "health_network_gap",
+            "network_security",
+            "Infrastructure",
+            "Can guest devices, personal devices, or general office systems communicate directly with clinical or medical-device networks?"
+        ),
+
+        adaptive_question(
+            "health_phish_result",
+            "email_phishing",
+            "People",
+            "What happened during your most recent phishing or social-engineering test, and were additional controls or training introduced afterward?"
+        ),
+
+        adaptive_question(
+            "health_ir_breach",
+            "incident_response",
+            "Response",
+            "If patient information were exposed today, who would coordinate the response and how would you handle investigation, containment, and required notifications?"
+        ),
+
+        adaptive_question(
+            "health_vendor",
+            "third_party",
+            "Third Parties",
+            "Which vendors can access patient information or clinical systems, and how do you verify that their security and privacy responsibilities are documented?"
+        ),
     ],
 
+    # ========================================================
+    # PROFESSIONAL SERVICES FOLLOW-UPS
+    # ========================================================
+
     "professional_services": [
-        "access_control",
-        "access_control",
-        "data_backup",
-        "network_security",
-        "email_phishing",
-        "incident_response",
+
+        adaptive_question(
+            "pro_mfa_admin",
+            "access_control",
+            "Identity & Access",
+            "Which accounts have administrative access to Microsoft 365, Google Workspace, CRM, finance, or other critical cloud systems?"
+        ),
+
+        adaptive_question(
+            "pro_shared",
+            "access_control",
+            "Identity & Access",
+            "Are any administrative or client-data accounts shared between employees, or does each person use a unique account?"
+        ),
+
+        adaptive_question(
+            "pro_access_review",
+            "access_control",
+            "Identity & Access",
+            "When was the last time you reviewed user and privileged access to client data, and how are unnecessary permissions removed?"
+        ),
+
+        adaptive_question(
+            "pro_backup_test",
+            "data_backup",
+            "Data",
+            "How often do you test restoring client or business data from backup, and when was the last successful restore?"
+        ),
+
+        adaptive_question(
+            "pro_backup_ransom",
+            "data_backup",
+            "Data",
+            "Are backup copies protected from ransomware or accidental deletion in your primary cloud or file-sharing environment?"
+        ),
+
+        adaptive_question(
+            "pro_remote",
+            "network_security",
+            "Infrastructure",
+            "How do you control access when employees connect to company systems from home, public Wi-Fi, or unmanaged devices?"
+        ),
+
+        adaptive_question(
+            "pro_patch_gap",
+            "network_security",
+            "Infrastructure",
+            "Are there any employee devices, servers, or applications that are currently known to be missing important security updates?"
+        ),
+
+        adaptive_question(
+            "pro_phish_result",
+            "email_phishing",
+            "People",
+            "What happened during your most recent phishing simulation or social-engineering test, and how did you respond to the results?"
+        ),
+
+        adaptive_question(
+            "pro_ir_client",
+            "incident_response",
+            "Response",
+            "If confidential client data were exposed today, who would lead the response and how would you communicate with affected clients?"
+        ),
+
+        adaptive_question(
+            "pro_vendor",
+            "third_party",
+            "Third Parties",
+            "Which vendors or contractors can access confidential client information, and how do you evaluate their security before granting access?"
+        ),
     ],
 }
 
 
 # ============================================================
-# CATEGORY INFORMATION
+# SCORECARD METADATA
 # ============================================================
 
 CATEGORY_INFO = {
+
     "access_control": {
         "name": "Access Control",
-        "nist_references": ["PR.AC-1"],
-        "cis_references": ["CIS 5.2"],
+        "nist_references": [
+            "PR.AA"
+        ],
+        "cis_references": [
+            "CIS 5",
+            "CIS 6"
+        ],
     },
 
     "data_backup": {
         "name": "Data Backup",
-        "nist_references": ["PR.IP-4"],
-        "cis_references": ["CIS 11.2"],
+        "nist_references": [
+            "PR.DS",
+            "RC.RP"
+        ],
+        "cis_references": [
+            "CIS 11"
+        ],
     },
 
     "network_security": {
         "name": "Network Security",
-        "nist_references": ["PR.AC-5"],
-        "cis_references": ["CIS 12.1"],
+        "nist_references": [
+            "PR.IR"
+        ],
+        "cis_references": [
+            "CIS 12",
+            "CIS 13"
+        ],
     },
 
     "email_phishing": {
         "name": "Email / Phishing Readiness",
-        "nist_references": ["PR.AT-1"],
-        "cis_references": ["CIS 14.1"],
+        "nist_references": [
+            "PR.AT"
+        ],
+        "cis_references": [
+            "CIS 14"
+        ],
     },
 
     "incident_response": {
         "name": "Incident Response",
-        "nist_references": ["RS.RP-1"],
-        "cis_references": ["CIS 17.1"],
+        "nist_references": [
+            "RS.MA",
+            "RS.CO",
+            "RS.MI"
+        ],
+        "cis_references": [
+            "CIS 17"
+        ],
     },
 }
 
 
 # ============================================================
-# GRADE CALCULATION
+# TEXT HELPERS
 # ============================================================
 
-def get_grade(score):
-    score = float(score)
-
-    if score >= 90:
-        return "A"
-    elif score >= 80:
-        return "B"
-    elif score >= 70:
-        return "C"
-    elif score >= 60:
-        return "D"
-    else:
-        return "F"
-
-
-# ============================================================
-# ANSWER SCORING HELPERS
-# ============================================================
-
-def normalize_answer(answer):
-    return re.sub(r"\s+", " ", answer.strip().lower())
-
-
-def score_yes_no_answer(answer):
-    """
-    Scores security yes/no answers based on the actual response.
-
-    Strong positive answer -> 100
-    Partial/uncertain answer -> 50
-    Negative answer -> 0
-    """
-
-    text = normalize_answer(answer)
-
-    negative_patterns = [
-        r"\bno\b",
-        r"\bnot\b",
-        r"\bnever\b",
-        r"\bnone\b",
-        r"\bdon't\b",
-        r"\bdo not\b",
-        r"\bdoesn't\b",
-        r"\bdoes not\b",
-        r"\bwithout\b",
-        r"\bnot yet\b",
-        r"\bwe haven'?t\b",
-        r"\bwe have not\b",
-    ]
-
-    positive_patterns = [
-        r"\byes\b",
-        r"\ball\b",
-        r"\balways\b",
-        r"\beveryone\b",
-        r"\bevery account\b",
-        r"\bevery user\b",
-        r"\benforced\b",
-        r"\bimplemented\b",
-        r"\bfully\b",
-        r"\bwe do\b",
-        r"\bwe have\b",
-        r"\bwe use\b",
-        r"\bwe conduct\b",
-        r"\bwe maintain\b",
-    ]
-
-    partial_patterns = [
-        r"\bsome\b",
-        r"\bmost\b",
-        r"\bpartially\b",
-        r"\bpartial\b",
-        r"\boccasionally\b",
-        r"\bsometimes\b",
-        r"\bnot all\b",
-        r"\bexcept\b",
-        r"\bdepends\b",
-        r"\bin progress\b",
-        r"\bplanning\b",
-        r"\bworking on\b",
-    ]
-
-    for pattern in partial_patterns:
-        if re.search(pattern, text):
-            return 50
-
-    for pattern in negative_patterns:
-        if re.search(pattern, text):
-            return 0
-
-    for pattern in positive_patterns:
-        if re.search(pattern, text):
-            return 100
-
-    # If the user gives a meaningful but ambiguous answer,
-    # give partial credit instead of assuming it is secure.
-    return 50
-
-
-def score_backup_answer(answer):
-    """
-    Scores backup frequency and quality.
-    """
-
-    text = normalize_answer(answer)
-
-    if any(
-        phrase in text
-        for phrase in [
-            "multiple times a day",
-            "multiple times daily",
-            "several times a day",
-            "continuous",
-            "real time",
-            "real-time",
-        ]
-    ):
-        return 100
-
-    if "daily" in text or "every day" in text:
-        return 95
-
-    if "weekly" in text or "every week" in text:
-        return 70
-
-    if "biweekly" in text or "every two weeks" in text:
-        return 60
-
-    if "monthly" in text or "every month" in text:
-        return 40
-
-    if "quarterly" in text or "every quarter" in text:
-        return 25
-
-    if "never" in text or "don't" in text or "do not" in text:
-        return 0
-
-    # If they mention testing restores, award additional credit.
-    base_score = 50
-
-    if "test" in text and ("restore" in text or "restoration" in text):
-        base_score += 20
-
-    if "offsite" in text or "off-site" in text:
-        base_score += 10
-
-    return min(base_score, 100)
-
-
-def score_count_answer(answer):
-    """
-    The employee-count questions are primarily informational.
-
-    We use them as a small risk-complexity factor rather than
-    allowing employee count to dominate the security score.
-    """
-
-    text = normalize_answer(answer)
-
-    numbers = re.findall(r"\b\d+\b", text)
-
-    if not numbers:
-        return 50
-
-    try:
-        count = int(numbers[0])
-    except ValueError:
-        return 50
-
-    if count <= 5:
-        return 90
-    elif count <= 15:
-        return 80
-    elif count <= 30:
-        return 70
-    elif count <= 75:
-        return 60
-    elif count <= 150:
-        return 50
-    else:
-        return 40
-
-
-def score_medical_device_answer(answer):
-    """
-    Scores healthcare medical-device security responses.
-    """
-
-    text = normalize_answer(answer)
-
-    strong_terms = [
-        "segmented",
-        "network segmentation",
-        "isolated",
-        "firewall",
-        "monitoring",
-        "patched",
-        "patch management",
-        "endpoint protection",
-        "access control",
-        "mfa",
-        "multi-factor",
-        "inventory",
-    ]
-
-    negative_terms = [
-        "not secured",
-        "no security",
-        "unknown",
-        "don't know",
-        "do not know",
-        "not sure",
-        "none",
-        "never",
-    ]
-
-    partial_terms = [
-        "some",
-        "most",
-        "partially",
-        "occasionally",
-        "manual",
-        "in progress",
-    ]
-
-    if any(term in text for term in negative_terms):
-        return 0
-
-    strong_count = sum(
-        1 for term in strong_terms if term in text
+def normalize(text: str) -> str:
+    return re.sub(
+        r"\s+",
+        " ",
+        text.strip().lower()
     )
 
-    if strong_count >= 4:
-        return 100
 
-    if strong_count >= 2:
-        return 80
+def clean_model_text(text: str) -> str:
 
-    if any(term in text for term in partial_terms):
-        return 50
+    text = text.strip()
 
-    if strong_count == 1:
-        return 60
+    if text.startswith("```"):
+        text = re.sub(
+            r"^```(?:json)?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE
+        )
 
-    return 50
+        text = re.sub(
+            r"\s*```$",
+            "",
+            text
+        )
 
-
-def score_answer(question, answer):
-    """
-    Main scoring function.
-
-    The score is based on the user's actual answer to the
-    actual assessment question.
-    """
-
-    question_text = normalize_answer(question)
-    answer_text = normalize_answer(answer)
-
-    if not answer_text:
-        return 0
-
-    # Employee/staff count questions
-    if "how many employees" in question_text:
-        return score_count_answer(answer)
-
-    if "how many staff members" in question_text:
-        return score_count_answer(answer)
-
-    if "how many team members" in question_text:
-        return score_count_answer(answer)
-
-    # Backup questions
-    if "how frequently" in question_text and "back up" in question_text:
-        return score_backup_answer(answer)
-
-    if "backups encrypted" in question_text:
-        score = score_yes_no_answer(answer)
-
-        if "test" in answer_text and (
-            "restore" in answer_text or
-            "restoration" in answer_text
-        ):
-            score = min(score + 20, 100)
-
-        if "quarterly" in answer_text:
-            score = min(score + 10, 100)
-
-        if "encrypted" in answer_text:
-            score = min(score + 10, 100)
-
-        return score
-
-    # Healthcare medical devices
-    if "medical devices" in question_text:
-        return score_medical_device_answer(answer)
-
-    # All remaining security questions
-    return score_yes_no_answer(answer)
+    return text.strip()
 
 
-# ============================================================
-# FINDINGS
-# ============================================================
+def parse_json_response(
+    text: str
+) -> Optional[dict]:
 
-def generate_finding(category, score, answer, vertical):
-    """
-    Generates findings from the actual category score and
-    actual answer.
-    """
+    cleaned = clean_model_text(text)
 
-    answer_text = normalize_answer(answer)
+    try:
 
-    if category == "access_control":
+        value = json.loads(cleaned)
 
-        if score < 40:
-            return "Access controls are insufficient and require immediate improvement."
+        if isinstance(value, dict):
+            return value
 
-        if score < 70:
-            return "Access controls appear to be only partially implemented or consistently enforced."
+    except Exception:
+        pass
 
-        if "mfa" in answer_text and score < 90:
-            return "MFA or administrative access protections are not consistently enforced."
+    match = re.search(
+        r"\{[\s\S]*\}",
+        cleaned
+    )
 
-        return "Access controls appear to be reasonably implemented based on the assessment response."
+    if match:
 
-    if category == "data_backup":
+        try:
 
-        if score < 40:
-            return "Critical business data is not being backed up frequently enough."
-
-        if score < 70:
-            return "Backup frequency or restoration testing should be improved."
-
-        if score < 90:
-            return "Backups exist, but additional testing or resilience improvements are recommended."
-
-        return "Backup practices appear strong based on the assessment response."
-
-    if category == "network_security":
-
-        if score < 40:
-            return "Network segmentation or connected-system security controls appear insufficient."
-
-        if score < 70:
-            return "Network security controls are partially implemented and should be strengthened."
-
-        return "Network security controls appear reasonably implemented."
-
-    if category == "email_phishing":
-
-        if score < 40:
-            return "Phishing awareness controls appear insufficient or absent."
-
-        if score < 70:
-            return "Phishing awareness training or testing should be strengthened."
-
-        if score < 90:
-            return "Phishing readiness exists but should be tested more regularly."
-
-        return "Email and phishing readiness appears strong based on the assessment response."
-
-    if category == "incident_response":
-
-        if score < 40:
-            return "No sufficiently mature incident response capability was identified."
-
-        if score < 70:
-            return "Incident response planning exists but requires additional documentation or testing."
-
-        if score < 90:
-            return "Incident response capability appears established but should be exercised regularly."
-
-        return "Incident response preparation appears strong."
-
-    return "Additional security review is recommended."
-
-
-# ============================================================
-# REMEDIATION PLAN
-# ============================================================
-
-def generate_remediation(category, score, day_start):
-    """
-    Generates remediation actions only when the category
-    actually needs improvement.
-    """
-
-    if score >= 90:
-        return None
-
-    if category == "access_control":
-
-        if score < 40:
-            priority = "Critical"
-            action = (
-                "Implement MFA for administrative and remote access, "
-                "review privileged accounts, and remove unnecessary access."
+            value = json.loads(
+                match.group(0)
             )
-            effort = "1-2 days"
-        else:
-            priority = "High"
-            action = (
-                "Review access permissions and ensure MFA is consistently "
-                "enforced for administrative and remote access."
-            )
-            effort = "4-8 hours"
 
-        return {
-            "day": day_start,
-            "priority": priority,
-            "category": category,
-            "action": action,
-            "nist_function": "Protect",
-            "nist_category": "PR.AC",
-            "cis_control": "CIS 5.2",
-            "effort_estimate": effort,
-        }
+            if isinstance(value, dict):
+                return value
 
-    if category == "data_backup":
-
-        if score < 40:
-            priority = "Critical"
-            action = (
-                "Implement reliable automated backups, maintain an offsite "
-                "copy, and perform a documented restore test."
-            )
-            effort = "1-2 days"
-        else:
-            priority = "High"
-            action = (
-                "Increase backup frequency and schedule regular restore "
-                "testing to verify recoverability."
-            )
-            effort = "4-8 hours"
-
-        return {
-            "day": day_start,
-            "priority": priority,
-            "category": category,
-            "action": action,
-            "nist_function": "Recover",
-            "nist_category": "RC.RP",
-            "cis_control": "CIS 11.3",
-            "effort_estimate": effort,
-        }
-
-    if category == "network_security":
-
-        if score < 40:
-            priority = "Critical"
-            action = (
-                "Implement network segmentation and isolate sensitive "
-                "systems from untrusted or guest devices."
-            )
-            effort = "1-2 days"
-        else:
-            priority = "High"
-            action = (
-                "Review network segmentation and strengthen isolation "
-                "between sensitive and untrusted systems."
-            )
-            effort = "4-8 hours"
-
-        return {
-            "day": day_start,
-            "priority": priority,
-            "category": category,
-            "action": action,
-            "nist_function": "Protect",
-            "nist_category": "PR.AC",
-            "cis_control": "CIS 12.1",
-            "effort_estimate": effort,
-        }
-
-    if category == "email_phishing":
-
-        if score < 40:
-            priority = "Critical"
-            action = (
-                "Launch security awareness training and establish "
-                "regular phishing simulations for staff."
-            )
-            effort = "1-2 days"
-        else:
-            priority = "High"
-            action = (
-                "Run a phishing simulation and refresh security awareness "
-                "training for employees."
-            )
-            effort = "4-6 hours"
-
-        return {
-            "day": day_start,
-            "priority": priority,
-            "category": category,
-            "action": action,
-            "nist_function": "Protect",
-            "nist_category": "PR.AT",
-            "cis_control": "CIS 14.1",
-            "effort_estimate": effort,
-        }
-
-    if category == "incident_response":
-
-        if score < 40:
-            priority = "Critical"
-            action = (
-                "Create and document an incident response plan covering "
-                "identification, containment, recovery, and notification."
-            )
-            effort = "1-2 days"
-        else:
-            priority = "High"
-            action = (
-                "Update the incident response plan and conduct a tabletop "
-                "exercise with key personnel."
-            )
-            effort = "4-8 hours"
-
-        return {
-            "day": day_start,
-            "priority": priority,
-            "category": category,
-            "action": action,
-            "nist_function": "Respond",
-            "nist_category": "RS.RP",
-            "cis_control": "CIS 17.1",
-            "effort_estimate": effort,
-        }
+        except Exception:
+            pass
 
     return None
 
 
 # ============================================================
-# ANSWER EXTRACTION
+# QUESTION LOOKUP
 # ============================================================
 
-def extract_answers(conversation_history, current_message):
-    """
-    Reconstructs question -> answer pairs from the conversation.
+def get_all_questions(
+    vertical_key: str
+) -> List[dict]:
 
-    The frontend sends the conversation history plus the current
-    user message. This function combines both so the final answer
-    is included when calculating the score.
-    """
+    return (
+        CORE_QUESTIONS.get(
+            vertical_key,
+            CORE_QUESTIONS["retail"]
+        )
+        +
+        ADAPTIVE_QUESTIONS.get(
+            vertical_key,
+            ADAPTIVE_QUESTIONS["retail"]
+        )
+    )
 
-    messages = []
 
-    for message in conversation_history:
-        if message.role in ["assistant", "user"]:
-            messages.append({
-                "role": message.role,
-                "content": message.content.strip()
-            })
+def get_question_by_text(
+    vertical_key: str,
+    text: str
+) -> Optional[dict]:
 
-    # Add the current user answer if it isn't already present.
-    current = current_message.strip()
+    target = normalize(text)
 
-    if current:
-        if not messages or not (
-            messages[-1]["role"] == "user"
-            and messages[-1]["content"] == current
-        ):
-            messages.append({
-                "role": "user",
-                "content": current
-            })
+    for item in get_all_questions(
+        vertical_key
+    ):
 
-    answers = []
+        if normalize(
+            item["text"]
+        ) == target:
 
-    current_question = None
+            return item
+
+    return None
+
+
+# ============================================================
+# EXTRACT QUESTION / ANSWER PAIRS
+# ============================================================
+
+def extract_question_answer_pairs(
+    history: List[ChatMessage],
+    current_message: str,
+    vertical_key: str
+) -> List[dict]:
+
+    messages = list(history)
+
+    if current_message.strip():
+
+        messages.append(
+            ChatMessage(
+                role="user",
+                content=current_message.strip()
+            )
+        )
+
+    pairs = []
+
+    pending_question = None
+
+    known_questions = {
+        normalize(item["text"]): item
+        for item in get_all_questions(
+            vertical_key
+        )
+    }
 
     for message in messages:
 
-        if message["role"] == "assistant":
+        content = message.content.strip()
 
-            text = message["content"].strip()
+        if not content:
+            continue
 
-            if text:
-                current_question = text
+        if message.role == "assistant":
 
-        elif message["role"] == "user":
+            normalized = normalize(
+                content
+            )
 
-            if current_question:
+            known = known_questions.get(
+                normalized
+            )
 
-                answers.append({
-                    "question": current_question,
-                    "answer": message["content"].strip()
-                })
+            if known:
+                pending_question = (
+                    known["text"]
+                )
 
-                current_question = None
+        elif message.role == "user":
 
-    return answers
+            if pending_question:
+
+                pairs.append(
+                    {
+                        "question":
+                            pending_question,
+
+                        "answer":
+                            content,
+
+                        "question_meta":
+                            get_question_by_text(
+                                vertical_key,
+                                pending_question
+                            ),
+                    }
+                )
+
+                pending_question = None
+
+    return pairs
 
 
 # ============================================================
-# BUILD REAL SCORECARD
+# GET QUESTIONS ALREADY ASKED
 # ============================================================
 
-def calculate_scorecard(vertical, conversation_history, current_message):
-    """
-    Calculates the complete scorecard from the user's actual
-    assessment answers.
-    """
+def get_asked_question_texts(
+    history: List[ChatMessage],
+    vertical_key: str
+) -> set:
 
-    vertical_key = (
-        vertical.value
-        if hasattr(vertical, "value")
-        else str(vertical)
-    )
-
-    questions = MOCK_QUESTIONS.get(
-        vertical_key,
-        MOCK_QUESTIONS["retail"]
-    )
-
-    categories = QUESTION_CATEGORIES.get(
-        vertical_key,
-        QUESTION_CATEGORIES["retail"]
-    )
-
-    answer_pairs = extract_answers(
-        conversation_history,
-        current_message
-    )
-
-    # --------------------------------------------------------
-    # Match answers to the official assessment questions.
-    # --------------------------------------------------------
-
-    matched_answers = []
-
-    for question in questions:
-
-        best_answer = None
-
-        # Exact question match first
-        for pair in answer_pairs:
-            if normalize_answer(pair["question"]) == normalize_answer(question):
-                best_answer = pair["answer"]
-                break
-
-        # Fallback: match by question order/content
-        if best_answer is None:
-            for pair in answer_pairs:
-
-                q1 = normalize_answer(pair["question"])
-                q2 = normalize_answer(question)
-
-                if (
-                    q1 in q2
-                    or q2 in q1
-                ):
-                    best_answer = pair["answer"]
-                    break
-
-        if best_answer is None:
-            best_answer = ""
-
-        matched_answers.append({
-            "question": question,
-            "answer": best_answer,
-        })
-
-    # --------------------------------------------------------
-    # Score each category.
-    # --------------------------------------------------------
-
-    category_scores = {
-        "access_control": [],
-        "data_backup": [],
-        "network_security": [],
-        "email_phishing": [],
-        "incident_response": [],
+    known_questions = {
+        normalize(item["text"])
+        for item in get_all_questions(
+            vertical_key
+        )
     }
 
-    for index, item in enumerate(matched_answers):
+    asked = set()
 
-        category = categories[index]
+    for message in history:
 
-        score = score_answer(
-            item["question"],
-            item["answer"]
+        if message.role != "assistant":
+            continue
+
+        normalized = normalize(
+            message.content
         )
 
-        category_scores[category].append(score)
+        if normalized in known_questions:
 
-    # --------------------------------------------------------
-    # Build category results.
-    # --------------------------------------------------------
+            asked.add(normalized)
+
+    return asked
+
+
+# ============================================================
+# GROQ JSON CALL
+# ============================================================
+
+def call_groq_json(
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.2,
+    max_tokens: int = 1200
+) -> Optional[dict]:
+
+    if not GROQ_API_KEY:
+        return None
+
+    payload = {
+
+        "model":
+            GROQ_MODEL,
+
+        "messages": [
+
+            {
+                "role":
+                    "system",
+
+                "content":
+                    system_prompt,
+            },
+
+            {
+                "role":
+                    "user",
+
+                "content":
+                    user_prompt,
+            },
+        ],
+
+        "temperature":
+            temperature,
+
+        "max_tokens":
+            max_tokens,
+
+        "response_format": {
+            "type":
+                "json_object"
+        },
+    }
+
+    request = urllib.request.Request(
+
+        GROQ_URL,
+
+        data=json.dumps(
+            payload
+        ).encode("utf-8"),
+
+        headers={
+            "Content-Type":
+                "application/json",
+
+            "Authorization":
+                f"Bearer {GROQ_API_KEY}",
+        },
+
+        method="POST",
+    )
+
+    try:
+
+        with urllib.request.urlopen(
+            request,
+            timeout=30
+        ) as response:
+
+            raw = (
+                response
+                .read()
+                .decode("utf-8")
+            )
+
+        body = json.loads(raw)
+
+        content = (
+            body
+            .get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+
+        if not content:
+            return None
+
+        return parse_json_response(
+            content
+        )
+
+    except (
+        urllib.error.HTTPError,
+        urllib.error.URLError,
+        TimeoutError,
+        json.JSONDecodeError,
+        KeyError,
+        IndexError,
+        TypeError,
+    ):
+
+        return None
+
+
+# ============================================================
+# DETERMINISTIC ADAPTIVE FALLBACK
+# ============================================================
+
+def deterministic_followup(
+    vertical_key: str,
+    pairs: List[dict],
+    asked: set
+) -> Optional[dict]:
+
+    if not pairs:
+        return None
+
+    last = pairs[-1]
+
+    answer = normalize(
+        last["answer"]
+    )
+
+    meta = (
+        last.get(
+            "question_meta"
+        )
+        or {}
+    )
+
+    domain = meta.get(
+        "domain",
+        ""
+    )
+
+    risk_terms = [
+
+        "no",
+        "not",
+        "never",
+        "none",
+
+        "don't",
+        "do not",
+
+        "unknown",
+        "not sure",
+        "unsure",
+
+        "sometimes",
+        "rarely",
+
+        "monthly",
+
+        "shared",
+
+        "manual",
+
+        "haven't",
+        "have not",
+
+        "not tested",
+        "never tested",
+    ]
+
+    needs_followup = any(
+        term in answer
+        for term in risk_terms
+    )
+
+    if not needs_followup:
+        return None
+
+    candidates = [
+
+        item
+
+        for item in ADAPTIVE_QUESTIONS.get(
+            vertical_key,
+            ADAPTIVE_QUESTIONS["retail"]
+        )
+
+        if normalize(
+            item["text"]
+        ) not in asked
+    ]
+
+    same_domain = [
+
+        item
+
+        for item in candidates
+
+        if item["domain"] == domain
+    ]
+
+    if same_domain:
+        return same_domain[0]
+
+    if candidates:
+        return candidates[0]
+
+    return None
+
+
+# ============================================================
+# AI ADAPTIVE QUESTION SELECTOR
+# ============================================================
+
+def choose_next_question(
+    vertical_key: str,
+    pairs: List[dict],
+    asked: set,
+    adaptive_count: int
+) -> Optional[dict]:
+
+    core = CORE_QUESTIONS.get(
+        vertical_key,
+        CORE_QUESTIONS["retail"]
+    )
+
+    adaptive = ADAPTIVE_QUESTIONS.get(
+        vertical_key,
+        ADAPTIVE_QUESTIONS["retail"]
+    )
+
+    unasked_core = [
+
+        item
+
+        for item in core
+
+        if normalize(
+            item["text"]
+        ) not in asked
+    ]
+
+    unasked_adaptive = [
+
+        item
+
+        for item in adaptive
+
+        if normalize(
+            item["text"]
+        ) not in asked
+    ]
+
+    if (
+        not unasked_core
+        and
+        not unasked_adaptive
+    ):
+        return None
+
+    if (
+        adaptive_count
+        >= MAX_ADAPTIVE_QUESTIONS
+    ):
+
+        if unasked_core:
+            return unasked_core[0]
+
+        return None
+
+    suggested_followup = (
+        deterministic_followup(
+            vertical_key,
+            pairs,
+            asked
+        )
+    )
+
+    last_question = (
+        pairs[-1]["question"]
+        if pairs
+        else ""
+    )
+
+    last_answer = (
+        pairs[-1]["answer"]
+        if pairs
+        else ""
+    )
+
+    candidate_pool = (
+        unasked_core
+        +
+        unasked_adaptive
+    )
+
+    candidate_text = "\n".join(
+
+        f'{item["id"]} | '
+        f'{item["domain"]} | '
+        f'{item["phase"]} | '
+        f'{item["text"]}'
+
+        for item in candidate_pool
+    )
+
+    transcript = "\n\n".join(
+
+        f'Q: {pair["question"]}\n'
+        f'A: {pair["answer"]}'
+
+        for pair in pairs[-12:]
+    )
+
+    suggested_text = (
+
+        suggested_followup["text"]
+
+        if suggested_followup
+
+        else "none"
+    )
+
+    system_prompt = """
+You are the adaptive interview controller for CyberCISO.
+
+Your job is to choose exactly ONE next cybersecurity assessment
+question from the candidate list supplied by the application.
+
+Rules:
+
+1. Return JSON only.
+
+2. The selected question MUST be copied exactly from
+   the candidate list.
+
+3. Never invent a question.
+
+4. Never repeat a question already asked.
+
+5. If the latest answer reveals a weakness, uncertainty,
+   missing control, shared account, lack of testing, or other
+   meaningful risk, prefer a relevant adaptive follow-up.
+
+6. If the latest answer is strong and no clarification is needed,
+   continue with the most useful unanswered core question.
+
+7. Cover these areas broadly:
+   organization,
+   access control,
+   data backup,
+   network security,
+   people/email,
+   incident response,
+   and third parties where relevant.
+
+8. Do not ask for passwords, API keys, secrets, or credentials.
+
+9. Keep questions practical for small and medium organizations.
+
+10. A maximum of four adaptive follow-up questions may be asked.
+
+11. Do not end the assessment while core questions remain.
+
+12. Prefer depth when an answer exposes a security weakness.
+
+13. Prefer breadth when the latest answer is strong.
+"""
+
+    user_prompt = f"""
+Business vertical:
+{vertical_key}
+
+Core questions answered:
+{
+    len([
+        p
+        for p in pairs
+        if not (
+            p.get("question_meta")
+            or {}
+        ).get("adaptive")
+    ])
+}
+
+Adaptive follow-ups answered:
+{adaptive_count}
+
+Latest question:
+{last_question}
+
+Latest answer:
+{last_answer}
+
+Recent assessment:
+{transcript}
+
+Deterministic fallback suggestion:
+{suggested_text}
+
+Candidate questions:
+{candidate_text}
+
+Return exactly:
+
+{{
+  "question_id": "one candidate id",
+  "question": "the exact candidate question text",
+  "reason": "one short sentence"
+}}
+"""
+
+    result = call_groq_json(
+
+        system_prompt,
+
+        user_prompt,
+
+        temperature=0.1,
+
+        max_tokens=500
+    )
+
+    if result:
+
+        selected_id = str(
+            result.get(
+                "question_id",
+                ""
+            )
+        ).strip()
+
+        selected_question = str(
+            result.get(
+                "question",
+                ""
+            )
+        ).strip()
+
+        for item in candidate_pool:
+
+            if (
+                item["id"]
+                ==
+                selected_id
+            ):
+
+                return item
+
+            if (
+                normalize(
+                    item["text"]
+                )
+                ==
+                normalize(
+                    selected_question
+                )
+            ):
+
+                return item
+
+    if suggested_followup:
+        return suggested_followup
+
+    if unasked_core:
+        return unasked_core[0]
+
+    if unasked_adaptive:
+        return unasked_adaptive[0]
+
+    return None
+
+
+# ============================================================
+# SCORECARD GRADE
+# ============================================================
+
+def grade_for_score(
+    score: int
+) -> str:
+
+    if score >= 90:
+        return "A"
+
+    if score >= 80:
+        return "B"
+
+    if score >= 70:
+        return "C"
+
+    if score >= 60:
+        return "D"
+
+    return "F"
+
+
+def clamp_score(
+    value: Any
+) -> int:
+
+    try:
+
+        number = int(
+            round(
+                float(value)
+            )
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return 50
+
+    return max(
+        0,
+        min(
+            100,
+            number
+        )
+    )
+
+
+# ============================================================
+# FALLBACK DOMAIN SCORING
+# ============================================================
+
+def fallback_domain_score(
+    pairs: List[dict],
+    domain: str
+) -> int:
+
+    relevant = [
+
+        pair
+
+        for pair in pairs
+
+        if (
+            pair
+            .get("question_meta")
+            or {}
+        ).get("domain")
+        ==
+        domain
+    ]
+
+    if not relevant:
+        return 50
+
+    total = 0
+    count = 0
+
+    strong_terms = [
+
+        "yes",
+        "always",
+        "enforced",
+        "tested",
+        "regularly",
+        "quarterly",
+        "daily",
+        "unique",
+        "segmented",
+        "isolated",
+        "documented",
+        "reviewed",
+        "monitored",
+        "encrypted",
+        "mfa",
+    ]
+
+    weak_terms = [
+
+        "no",
+        "never",
+        "none",
+        "don't",
+        "do not",
+        "not sure",
+        "unknown",
+        "shared",
+        "not tested",
+        "not encrypted",
+        "flat network",
+        "monthly",
+        "rarely",
+    ]
+
+    for pair in relevant:
+
+        text = normalize(
+            pair["answer"]
+        )
+
+        strong_hits = sum(
+
+            1
+
+            for term in strong_terms
+
+            if term in text
+        )
+
+        weak_hits = sum(
+
+            1
+
+            for term in weak_terms
+
+            if term in text
+        )
+
+        if weak_hits > strong_hits:
+
+            score = 30
+
+        elif strong_hits > 0:
+
+            score = 80
+
+        else:
+
+            score = 55
+
+        total += score
+        count += 1
+
+    return clamp_score(
+        total / count
+    )
+
+
+# ============================================================
+# FALLBACK SCORECARD
+# ============================================================
+
+def fallback_scorecard(
+    vertical_key: str,
+    pairs: List[dict]
+) -> dict:
+
+    categories = [
+
+        "access_control",
+
+        "data_backup",
+
+        "network_security",
+
+        "email_phishing",
+
+        "incident_response",
+    ]
 
     sub_categories = []
 
-    for category in [
-        "access_control",
-        "data_backup",
-        "network_security",
-        "email_phishing",
-        "incident_response",
-    ]:
+    for category in categories:
 
-        scores = category_scores[category]
+        score = fallback_domain_score(
+            pairs,
+            category
+        )
 
-        if scores:
-            category_score = round(
-                sum(scores) / len(scores)
+        info = CATEGORY_INFO[
+            category
+        ]
+
+        if score < 60:
+
+            finding = (
+                f"{info['name']} shows "
+                "significant gaps based "
+                "on the assessment evidence."
             )
+
+        elif score < 80:
+
+            finding = (
+                f"{info['name']} has partial "
+                "controls or testing gaps "
+                "that should be strengthened."
+            )
+
         else:
-            category_score = 0
 
-        category_score = max(
-            0,
-            min(100, category_score)
-        )
-
-        category_answers = []
-
-        for index, question in enumerate(questions):
-
-            if categories[index] == category:
-                category_answers.append(
-                    matched_answers[index]
-                )
-
-        representative_answer = ""
-
-        for item in category_answers:
-            if item["answer"]:
-                representative_answer = item["answer"]
-                break
-
-        finding = generate_finding(
-            category,
-            category_score,
-            representative_answer,
-            vertical_key
-        )
+            finding = (
+                f"{info['name']} appears "
+                "reasonably mature based "
+                "on the evidence provided."
+            )
 
         sub_categories.append({
-            "category": category,
-            "score": category_score,
-            "grade": get_grade(category_score),
-            "findings": [finding],
-            "nist_references": CATEGORY_INFO[category]["nist_references"],
-            "cis_references": CATEGORY_INFO[category]["cis_references"],
+
+            "category":
+                category,
+
+            "score":
+                score,
+
+            "grade":
+                grade_for_score(score),
+
+            "findings":
+                [finding],
+
+            "nist_references":
+                info[
+                    "nist_references"
+                ],
+
+            "cis_references":
+                info[
+                    "cis_references"
+                ],
         })
 
-    # --------------------------------------------------------
-    # Overall score.
-    #
-    # All five categories are equally weighted.
-    # --------------------------------------------------------
+    overall_score = clamp_score(
 
-    overall_score = round(
         sum(
-            category["score"]
-            for category in sub_categories
-        ) / len(sub_categories)
+            item["score"]
+            for item in sub_categories
+        )
+        /
+        len(sub_categories)
     )
-
-    overall_score = max(
-        0,
-        min(100, overall_score)
-    )
-
-    overall_grade = get_grade(overall_score)
-
-    # --------------------------------------------------------
-    # Generate remediation plan based ONLY on weak categories.
-    # --------------------------------------------------------
 
     remediation_plan = []
 
-    day_schedule = [1, 3, 7, 14, 21]
+    day = 1
 
-    schedule_index = 0
+    for item in sorted(
 
-    # Critical/weak categories first
-    sorted_categories = sorted(
         sub_categories,
-        key=lambda item: item["score"]
-    )
 
-    for category in sorted_categories:
+        key=lambda x:
+            x["score"]
+    ):
 
-        score = category["score"]
-
-        if score >= 90:
+        if item["score"] >= 80:
             continue
 
-        day = day_schedule[
-            min(
-                schedule_index,
-                len(day_schedule) - 1
-            )
+        category = item[
+            "category"
         ]
 
-        remediation = generate_remediation(
-            category["category"],
-            score,
-            day
-        )
+        info = CATEGORY_INFO[
+            category
+        ]
 
-        if remediation:
-            remediation_plan.append(remediation)
-            schedule_index += 1
+        remediation_plan.append({
 
-    # --------------------------------------------------------
-    # Final scorecard.
-    # --------------------------------------------------------
+            "day":
+                day,
+
+            "priority": (
+
+                "Critical"
+
+                if item["score"] < 50
+
+                else
+
+                "High"
+
+                if item["score"] < 70
+
+                else
+
+                "Medium"
+            ),
+
+            "category":
+                category,
+
+            "action": (
+                f"Strengthen "
+                f"{info['name']} controls "
+                "and validate them with "
+                "documented testing."
+            ),
+
+            "nist_function": (
+
+                "Respond"
+
+                if category ==
+                "incident_response"
+
+                else
+
+                "Protect"
+            ),
+
+            "nist_category":
+                info[
+                    "nist_references"
+                ][0],
+
+            "cis_control":
+                info[
+                    "cis_references"
+                ][0],
+
+            "effort_estimate":
+                "4-8 hours",
+        })
+
+        day += 7
 
     return {
-        "overall_grade": overall_grade,
-        "overall_score": overall_score,
-        "sub_categories": sub_categories,
-        "remediation_plan": remediation_plan,
-        "vertical": vertical_key,
-        "interview_complete": True,
-        "next_question": None,
+
+        "overall_grade":
+            grade_for_score(
+                overall_score
+            ),
+
+        "overall_score":
+            overall_score,
+
+        "sub_categories":
+            sub_categories,
+
+        "remediation_plan":
+            remediation_plan,
+
+        "vertical":
+            vertical_key,
+
+        "interview_complete":
+            True,
+
+        "next_question":
+            None,
     }
 
 
 # ============================================================
-# FASTAPI
+# AI SCORECARD
+# ============================================================
+
+def build_scorecard(
+    vertical_key: str,
+    pairs: List[dict]
+) -> dict:
+
+    categories = [
+
+        "access_control",
+
+        "data_backup",
+
+        "network_security",
+
+        "email_phishing",
+
+        "incident_response",
+    ]
+
+    evidence = "\n\n".join(
+
+        f'Question: {pair["question"]}\n'
+        f'Answer: {pair["answer"]}'
+
+        for pair in pairs
+    )
+
+    system_prompt = """
+You are the cybersecurity maturity scoring engine for CyberCISO.
+
+Evaluate ONLY the evidence contained in the supplied assessment.
+
+Rules:
+
+1. Do not invent controls, policies, technologies,
+   tests, certifications, or facts.
+
+2. If evidence is missing or ambiguous,
+   score conservatively.
+
+3. Strong scores require evidence of actual implementation.
+
+4. Where appropriate, strong maturity also requires evidence
+   of review, monitoring, or testing.
+
+5. Weak scores should reflect missing, inconsistent,
+   shared, untested, or explicitly absent controls.
+
+6. Score these five domains from 0 to 100:
+   access_control,
+   data_backup,
+   network_security,
+   email_phishing,
+   incident_response.
+
+7. Overall score MUST be the arithmetic mean of the
+   five domain scores.
+
+8. Findings must describe weaknesses actually evidenced
+   by the transcript.
+
+9. Do not make unsupported legal or compliance claims.
+
+10. Remediation actions must directly address identified
+    weaknesses.
+
+11. Return JSON only.
+"""
+
+    user_prompt = f"""
+Business vertical:
+{vertical_key}
+
+Assessment evidence:
+
+{evidence}
+
+Return exactly this structure:
+
+{{
+  "overall_score": 0,
+  "overall_grade": "A",
+
+  "sub_categories": [
+
+    {{
+      "category": "access_control",
+      "score": 0,
+      "grade": "A",
+      "findings": ["..."],
+      "nist_references": ["..."],
+      "cis_references": ["..."]
+    }},
+
+    {{
+      "category": "data_backup",
+      "score": 0,
+      "grade": "A",
+      "findings": ["..."],
+      "nist_references": ["..."],
+      "cis_references": ["..."]
+    }},
+
+    {{
+      "category": "network_security",
+      "score": 0,
+      "grade": "A",
+      "findings": ["..."],
+      "nist_references": ["..."],
+      "cis_references": ["..."]
+    }},
+
+    {{
+      "category": "email_phishing",
+      "score": 0,
+      "grade": "A",
+      "findings": ["..."],
+      "nist_references": ["..."],
+      "cis_references": ["..."]
+    }},
+
+    {{
+      "category": "incident_response",
+      "score": 0,
+      "grade": "A",
+      "findings": ["..."],
+      "nist_references": ["..."],
+      "cis_references": ["..."]
+    }}
+
+  ],
+
+  "remediation_plan": [
+
+    {{
+      "day": 1,
+      "priority": "High",
+      "category": "access_control",
+      "action": "...",
+      "nist_function": "Protect",
+      "nist_category": "PR.AA",
+      "cis_control": "CIS 5",
+      "effort_estimate": "4-8 hours"
+    }}
+
+  ]
+}}
+
+Only include remediation actions that are supported
+by weaknesses in the assessment evidence.
+"""
+
+    result = call_groq_json(
+
+        system_prompt,
+
+        user_prompt,
+
+        temperature=0.1,
+
+        max_tokens=3500
+    )
+
+    if not result:
+
+        return fallback_scorecard(
+            vertical_key,
+            pairs
+        )
+
+    try:
+
+        raw_categories = result.get(
+            "sub_categories",
+            []
+        )
+
+        category_map = {}
+
+        for item in raw_categories:
+
+            if not isinstance(
+                item,
+                dict
+            ):
+                continue
+
+            category = str(
+                item.get(
+                    "category",
+                    ""
+                )
+            ).strip()
+
+            if category not in categories:
+                continue
+
+            score = clamp_score(
+                item.get(
+                    "score",
+                    50
+                )
+            )
+
+            findings = item.get(
+                "findings",
+                []
+            )
+
+            if not isinstance(
+                findings,
+                list
+            ):
+
+                findings = [
+                    str(findings)
+                ]
+
+            clean_findings = [
+
+                str(value)
+
+                for value in findings[:3]
+
+                if str(value).strip()
+            ]
+
+            if not clean_findings:
+
+                clean_findings = [
+                    "Evidence for this domain was limited."
+                ]
+
+            category_map[
+                category
+            ] = {
+
+                "category":
+                    category,
+
+                "score":
+                    score,
+
+                "grade":
+                    grade_for_score(
+                        score
+                    ),
+
+                "findings":
+                    clean_findings,
+
+                "nist_references":
+                    item.get(
+                        "nist_references",
+                        CATEGORY_INFO[
+                            category
+                        ][
+                            "nist_references"
+                        ]
+                    ),
+
+                "cis_references":
+                    item.get(
+                        "cis_references",
+                        CATEGORY_INFO[
+                            category
+                        ][
+                            "cis_references"
+                        ]
+                    ),
+            }
+
+        for category in categories:
+
+            if category in category_map:
+                continue
+
+            score = fallback_domain_score(
+                pairs,
+                category
+            )
+
+            category_map[
+                category
+            ] = {
+
+                "category":
+                    category,
+
+                "score":
+                    score,
+
+                "grade":
+                    grade_for_score(
+                        score
+                    ),
+
+                "findings": [
+                    "Evidence for this domain was limited."
+                ],
+
+                "nist_references":
+                    CATEGORY_INFO[
+                        category
+                    ][
+                        "nist_references"
+                    ],
+
+                "cis_references":
+                    CATEGORY_INFO[
+                        category
+                    ][
+                        "cis_references"
+                    ],
+            }
+
+        sub_categories = [
+
+            category_map[
+                category
+            ]
+
+            for category in categories
+        ]
+
+        overall_score = clamp_score(
+
+            sum(
+                item["score"]
+                for item in sub_categories
+            )
+            /
+            len(sub_categories)
+        )
+
+        raw_plan = result.get(
+            "remediation_plan",
+            []
+        )
+
+        remediation_plan = []
+
+        if isinstance(
+            raw_plan,
+            list
+        ):
+
+            for index, item in enumerate(
+                raw_plan[:8]
+            ):
+
+                if not isinstance(
+                    item,
+                    dict
+                ):
+                    continue
+
+                category = str(
+                    item.get(
+                        "category",
+                        ""
+                    )
+                ).strip()
+
+                if category not in categories:
+                    continue
+
+                action = str(
+                    item.get(
+                        "action",
+                        ""
+                    )
+                ).strip()
+
+                if not action:
+                    continue
+
+                try:
+
+                    day = int(
+                        item.get(
+                            "day",
+                            (index + 1) * 7
+                        )
+                    )
+
+                except (
+                    TypeError,
+                    ValueError
+                ):
+
+                    day = (
+                        index + 1
+                    ) * 7
+
+                remediation_plan.append({
+
+                    "day":
+                        max(
+                            1,
+                            day
+                        ),
+
+                    "priority":
+                        str(
+                            item.get(
+                                "priority",
+                                "High"
+                            )
+                        ),
+
+                    "category":
+                        category,
+
+                    "action":
+                        action,
+
+                    "nist_function":
+                        str(
+                            item.get(
+                                "nist_function",
+                                "Protect"
+                            )
+                        ),
+
+                    "nist_category":
+                        str(
+                            item.get(
+                                "nist_category",
+                                CATEGORY_INFO[
+                                    category
+                                ][
+                                    "nist_references"
+                                ][0]
+                            )
+                        ),
+
+                    "cis_control":
+                        str(
+                            item.get(
+                                "cis_control",
+                                CATEGORY_INFO[
+                                    category
+                                ][
+                                    "cis_references"
+                                ][0]
+                            )
+                        ),
+
+                    "effort_estimate":
+                        str(
+                            item.get(
+                                "effort_estimate",
+                                "4-8 hours"
+                            )
+                        ),
+                })
+
+        return {
+
+            "overall_grade":
+                grade_for_score(
+                    overall_score
+                ),
+
+            "overall_score":
+                overall_score,
+
+            "sub_categories":
+                sub_categories,
+
+            "remediation_plan":
+                remediation_plan,
+
+            "vertical":
+                vertical_key,
+
+            "interview_complete":
+                True,
+
+            "next_question":
+                None,
+        }
+
+    except Exception:
+
+        return fallback_scorecard(
+            vertical_key,
+            pairs
+        )
+
+
+# ============================================================
+# QUESTION COUNTS
+# ============================================================
+
+def count_question_types(
+    pairs: List[dict]
+) -> tuple[int, int]:
+
+    core_count = 0
+    adaptive_count = 0
+
+    for pair in pairs:
+
+        meta = (
+            pair.get(
+                "question_meta"
+            )
+            or {}
+        )
+
+        if meta.get(
+            "adaptive"
+        ):
+
+            adaptive_count += 1
+
+        else:
+
+            core_count += 1
+
+    return (
+        core_count,
+        adaptive_count
+    )
+
+
+# ============================================================
+# FASTAPI APP
 # ============================================================
 
 app = FastAPI(
+
     title="CyberCISO API",
-    version="1.0.0"
+
+    version="2.0.0"
 )
 
 
@@ -979,125 +2356,418 @@ app = FastAPI(
 # ============================================================
 
 app.add_middleware(
+
     CORSMiddleware,
+
     allow_origins=["*"],
+
     allow_credentials=True,
+
     allow_methods=["*"],
+
     allow_headers=["*"],
 )
 
 
 # ============================================================
-# BASIC ROUTES
+# HEALTH ROUTES
 # ============================================================
 
 @app.get("/")
 async def root():
+
     return {
-        "message": "CyberCISO API",
-        "version": "1.0.0"
+
+        "message":
+            "CyberCISO API",
+
+        "version":
+            "2.0.0"
     }
 
 
 @app.get("/api/index")
 async def api_index():
+
     return {
-        "status": "healthy",
-        "service": "cyberciso-backend"
+
+        "status":
+            "healthy",
+
+        "service":
+            "cyberciso-backend",
+
+        "adaptive_assessment":
+            True,
+
+        "groq_configured":
+            bool(
+                GROQ_API_KEY
+            ),
     }
 
 
 @app.get("/api/v1/health")
 @app.get("/health")
 async def health():
+
     return {
-        "status": "healthy",
-        "service": "cyberciso-backend"
+
+        "status":
+            "healthy",
+
+        "service":
+            "cyberciso-backend",
+
+        "adaptive_assessment":
+            True,
+
+        "groq_configured":
+            bool(
+                GROQ_API_KEY
+            ),
     }
 
 
 # ============================================================
-# ASSESSMENT CHAT
+# CHAT / ADAPTIVE ASSESSMENT
 # ============================================================
 
-@app.post("/api/index", response_model=ChatResponse)
-@app.post("/api/v1/chat", response_model=ChatResponse)
-@app.post("/v1/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
+@app.post(
+    "/api/index",
+    response_model=ChatResponse
+)
+@app.post(
+    "/api/v1/chat",
+    response_model=ChatResponse
+)
+@app.post(
+    "/v1/chat",
+    response_model=ChatResponse
+)
+async def chat(
+    req: ChatRequest
+):
 
-    # --------------------------------------------------------
-    # 1. Determine selected business vertical
-    # --------------------------------------------------------
-
-    vertical = req.vertical or Vertical.RETAIL
+    vertical = (
+        req.vertical
+        or
+        Vertical.RETAIL
+    )
 
     vertical_key = (
+
         vertical.value
-        if hasattr(vertical, "value")
-        else vertical
-    )
 
-    questions = MOCK_QUESTIONS.get(
-        vertical_key,
-        MOCK_QUESTIONS["retail"]
-    )
-
-    # --------------------------------------------------------
-    # 2. Find every question already displayed
-    # --------------------------------------------------------
-
-    already_asked = set()
-
-    for message in req.conversation_history:
-
-        if message.role != "assistant":
-            continue
-
-        text = message.content.strip()
-
-        if not text:
-            continue
-
-        already_asked.add(
-            text.lower()
+        if hasattr(
+            vertical,
+            "value"
         )
 
-    # --------------------------------------------------------
-    # 3. Find first unused question
-    # --------------------------------------------------------
-
-    next_question = None
-
-    for question in questions:
-
-        if question.lower() not in already_asked:
-            next_question = question
-            break
+        else str(
+            vertical
+        )
+    )
 
     # --------------------------------------------------------
-    # 4. If all questions have been asked,
-    #    calculate the REAL scorecard.
+    # Reconstruct the complete assessment including the
+    # current answer.
     # --------------------------------------------------------
 
-    if next_question is None:
+    pairs = extract_question_answer_pairs(
 
-        scorecard = calculate_scorecard(
-            vertical=vertical,
-            conversation_history=req.conversation_history,
-            current_message=req.message,
+        req.conversation_history,
+
+        req.message,
+
+        vertical_key
+    )
+
+    # --------------------------------------------------------
+    # Questions already asked.
+    # --------------------------------------------------------
+
+    asked = get_asked_question_texts(
+
+        req.conversation_history,
+
+        vertical_key
+    )
+
+    # --------------------------------------------------------
+    # Count core and adaptive questions.
+    # --------------------------------------------------------
+
+    core_count, adaptive_count = (
+        count_question_types(
+            pairs
+        )
+    )
+
+    # --------------------------------------------------------
+    # MAXIMUM REACHED
+    # --------------------------------------------------------
+
+    if (
+        core_count >= MIN_CORE_QUESTIONS
+        and
+        adaptive_count >= MAX_ADAPTIVE_QUESTIONS
+    ):
+
+        scorecard = build_scorecard(
+
+            vertical_key,
+
+            pairs
         )
 
         return ChatResponse(
+
             response="",
+
             scorecard=scorecard,
+
             interview_complete=True
         )
 
     # --------------------------------------------------------
-    # 5. Return next unused question
+    # CORE QUESTIONS COMPLETE
+    #
+    # Let Groq decide whether the company has an unresolved
+    # weakness worth investigating further.
+    # --------------------------------------------------------
+
+    if core_count >= MIN_CORE_QUESTIONS:
+
+        adaptive_candidates = [
+
+            item
+
+            for item in ADAPTIVE_QUESTIONS.get(
+                vertical_key,
+                ADAPTIVE_QUESTIONS["retail"]
+            )
+
+            if normalize(
+                item["text"]
+            ) not in asked
+        ]
+
+        # No follow-up questions remain.
+        if not adaptive_candidates:
+
+            scorecard = build_scorecard(
+
+                vertical_key,
+
+                pairs
+            )
+
+            return ChatResponse(
+
+                response="",
+
+                scorecard=scorecard,
+
+                interview_complete=True
+            )
+
+        transcript = "\n\n".join(
+
+            f'Q: {pair["question"]}\n'
+            f'A: {pair["answer"]}'
+
+            for pair in pairs
+        )
+
+        candidate_text = "\n".join(
+
+            f'{item["id"]} | '
+            f'{item["domain"]} | '
+            f'{item["text"]}'
+
+            for item in adaptive_candidates
+        )
+
+        system_prompt = """
+You are the final adaptive checkpoint for CyberCISO.
+
+Decide whether the assessment has an important unresolved
+cybersecurity weakness that deserves one more follow-up.
+
+Return JSON only.
+
+If more investigation is useful:
+
+{
+  "ask_followup": true,
+  "question_id": "candidate id",
+  "question": "exact candidate question"
+}
+
+If the evidence is sufficient:
+
+{
+  "ask_followup": false,
+  "question_id": "",
+  "question": ""
+}
+
+Never invent a question.
+Only select from the candidate list.
+"""
+
+        user_prompt = f"""
+Business vertical:
+{vertical_key}
+
+Assessment transcript:
+
+{transcript}
+
+Remaining adaptive questions:
+
+{candidate_text}
+"""
+
+        decision = call_groq_json(
+
+            system_prompt,
+
+            user_prompt,
+
+            temperature=0.1,
+
+            max_tokens=500
+        )
+
+        if decision:
+
+            ask_followup = (
+                decision.get(
+                    "ask_followup",
+                    False
+                )
+                is True
+            )
+
+            if ask_followup:
+
+                selected_id = str(
+                    decision.get(
+                        "question_id",
+                        ""
+                    )
+                ).strip()
+
+                selected_question = str(
+                    decision.get(
+                        "question",
+                        ""
+                    )
+                ).strip()
+
+                for item in adaptive_candidates:
+
+                    if (
+                        item["id"]
+                        ==
+                        selected_id
+                    ):
+
+                        return ChatResponse(
+
+                            response:
+                                item["text"],
+
+                            interview_complete:
+                                False
+                        )
+
+                    if (
+                        normalize(
+                            item["text"]
+                        )
+                        ==
+                        normalize(
+                            selected_question
+                        )
+                    ):
+
+                        return ChatResponse(
+
+                            response:
+                                item["text"],
+
+                            interview_complete:
+                                False
+                        )
+
+        # No more useful follow-up.
+        scorecard = build_scorecard(
+
+            vertical_key,
+
+            pairs
+        )
+
+        return ChatResponse(
+
+            response="",
+
+            scorecard=scorecard,
+
+            interview_complete=True
+        )
+
+    # --------------------------------------------------------
+    # CORE QUESTIONS STILL REMAIN.
+    #
+    # The adaptive engine chooses the next question.
+    # --------------------------------------------------------
+
+    next_question = choose_next_question(
+
+        vertical_key,
+
+        pairs,
+
+        asked,
+
+        adaptive_count
+    )
+
+    # --------------------------------------------------------
+    # SAFETY FALLBACK
+    # --------------------------------------------------------
+
+    if next_question is None:
+
+        scorecard = build_scorecard(
+
+            vertical_key,
+
+            pairs
+        )
+
+        return ChatResponse(
+
+            response="",
+
+            scorecard=scorecard,
+
+            interview_complete=True
+        )
+
+    # --------------------------------------------------------
+    # RETURN THE NEXT QUESTION
     # --------------------------------------------------------
 
     return ChatResponse(
-        response=next_question,
-        interview_complete=False
+
+        response:
+            next_question["text"],
+
+        interview_complete:
+            False
     )
