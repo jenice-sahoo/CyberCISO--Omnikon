@@ -250,7 +250,7 @@ async def chat(req: ChatRequest):
 
     # Ask the next question
     idx = user_turns
-        return ChatResponse(
+    return ChatResponse(
         response=qs[idx],
         interview_complete=False
     )
