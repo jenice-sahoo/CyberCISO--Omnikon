@@ -1,34 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import {
+  useState,
+} from 'react';
 
 import {
-  RotateCcw,
-  Download,
-  AlertCircle,
-  Shield,
-  Calendar,
-  Target,
+  ArrowLeft,
   ArrowUpRight,
-  CheckCircle2,
-  Activity,
   BarChart3,
-  Lock,
-  Network,
+  CheckCircle2,
+  ChevronRight,
   Database,
+  Download,
+  FileText,
+  Lock,
   Mail,
+  Network,
+  RotateCcw,
+  Shield,
   Siren,
   Sparkles,
-  ChevronRight,
+  Target,
+  TrendingUp,
+  TriangleAlert,
 } from 'lucide-react';
 
-import { ScorecardResponse } from '@/types';
+import {
+  ScorecardResponse,
+} from '@/types';
 
 import {
   cn,
+  formatCategory,
   formatVertical,
   getPriorityColor,
-  formatCategory,
 } from '@/lib/utils';
 
 
@@ -38,11 +43,14 @@ import {
 
 interface ScorecardViewProps {
 
-  scorecard: ScorecardResponse;
+  scorecard:
+    ScorecardResponse;
 
-  onRestart: () => void;
+  onRestart:
+    () => void;
 
-  onDownloadPDF: () => Promise<void>;
+  onDownloadPDF:
+    () => Promise<void>;
 
 }
 
@@ -51,17 +59,28 @@ interface ScorecardViewProps {
    DOMAIN ICONS
    ============================================================ */
 
-const DOMAIN_ICONS: Record<string, any> = {
+const DOMAIN_ICONS: Record<
+  string,
+  typeof Shield
+> = {
 
-  'access_control': Shield,
+  access_control:
+    Shield,
 
-  'data_backup': Database,
+  data_backup:
+    Database,
 
-  'network_security': Network,
+  network_security:
+    Network,
 
-  'email_phishing_readiness': Mail,
+  email_phishing_readiness:
+    Mail,
 
-  'incident_response': Siren,
+  email_phishing:
+    Mail,
+
+  incident_response:
+    Siren,
 
 };
 
@@ -70,40 +89,13 @@ const DOMAIN_ICONS: Record<string, any> = {
    GRADE HELPERS
    ============================================================ */
 
-function getGradeGradient(
+function gradeText(
   grade: string
 ): string {
 
-  switch (grade.toUpperCase()) {
-
-    case 'A':
-      return 'from-emerald-400 via-green-400 to-cyan-400';
-
-    case 'B':
-      return 'from-violet-400 via-purple-400 to-blue-400';
-
-    case 'C':
-      return 'from-amber-300 via-yellow-400 to-orange-400';
-
-    case 'D':
-      return 'from-orange-400 via-red-400 to-pink-400';
-
-    case 'F':
-      return 'from-red-500 via-rose-500 to-fuchsia-500';
-
-    default:
-      return 'from-violet-400 to-blue-400';
-
-  }
-
-}
-
-
-function getGradeText(
-  grade: string
-): string {
-
-  switch (grade.toUpperCase()) {
+  switch (
+    grade.toUpperCase()
+  ) {
 
     case 'A':
       return 'text-emerald-300';
@@ -128,11 +120,44 @@ function getGradeText(
 }
 
 
-function getScoreBar(
+function gradeGradient(
   grade: string
 ): string {
 
-  switch (grade.toUpperCase()) {
+  switch (
+    grade.toUpperCase()
+  ) {
+
+    case 'A':
+      return 'from-emerald-400 via-cyan-400 to-blue-400';
+
+    case 'B':
+      return 'from-violet-400 via-fuchsia-400 to-blue-400';
+
+    case 'C':
+      return 'from-amber-300 via-yellow-400 to-orange-400';
+
+    case 'D':
+      return 'from-orange-400 via-red-400 to-pink-400';
+
+    case 'F':
+      return 'from-red-500 via-rose-500 to-fuchsia-500';
+
+    default:
+      return 'from-violet-400 to-blue-400';
+
+  }
+
+}
+
+
+function scoreBarGradient(
+  grade: string
+): string {
+
+  switch (
+    grade.toUpperCase()
+  ) {
 
     case 'A':
       return 'from-emerald-400 to-cyan-400';
@@ -157,6 +182,37 @@ function getScoreBar(
 }
 
 
+function gradeDescription(
+  grade: string
+): string {
+
+  switch (
+    grade.toUpperCase()
+  ) {
+
+    case 'A':
+      return 'Excellent security posture';
+
+    case 'B':
+      return 'Good security posture';
+
+    case 'C':
+      return 'Moderate security posture';
+
+    case 'D':
+      return 'Needs improvement';
+
+    case 'F':
+      return 'Critical improvements required';
+
+    default:
+      return 'Assessment completed';
+
+  }
+
+}
+
+
 /* ============================================================
    SCORE RING
    ============================================================ */
@@ -169,27 +225,36 @@ function ScoreRing({
   grade: string;
 }) {
 
-  const radius = 82;
+  const radius =
+    82;
 
   const circumference =
-    2 * Math.PI * radius;
+    2 *
+    Math.PI *
+    radius;
+
+  const safeScore =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        score
+      )
+    );
 
   const offset =
     circumference -
-    (score / 100) *
+    (safeScore /
+      100) *
       circumference;
 
 
   return (
 
-    <div className="relative w-64 h-64 mx-auto">
+    <div className="relative w-60 h-60 mx-auto">
 
-      {/* Glow */}
+      <div className="absolute inset-10 rounded-full bg-violet-600/20 blur-[55px]" />
 
-      <div className="absolute inset-8 rounded-full bg-violet-600/20 blur-[55px]" />
-
-
-      {/* SVG */}
 
       <svg
         viewBox="0 0 200 200"
@@ -201,9 +266,10 @@ function ScoreRing({
           cy="100"
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.06)"
+          stroke="rgba(255,255,255,0.05)"
           strokeWidth="10"
         />
+
 
         <circle
           cx="100"
@@ -217,6 +283,7 @@ function ScoreRing({
           strokeDashoffset={offset}
           className="transition-all duration-1000"
         />
+
 
         <defs>
 
@@ -235,7 +302,7 @@ function ScoreRing({
 
             <stop
               offset="50%"
-              stopColor="#c084fc"
+              stopColor="#d946ef"
             />
 
             <stop
@@ -250,18 +317,17 @@ function ScoreRing({
       </svg>
 
 
-      {/* Center */}
-
       <div className="absolute inset-0 flex flex-col items-center justify-center">
 
         <div
           className={cn(
-            'text-6xl font-black tracking-tight bg-gradient-to-br bg-clip-text text-transparent',
-            getGradeGradient(grade)
+            'text-6xl font-black bg-gradient-to-br bg-clip-text text-transparent',
+            gradeGradient(grade)
           )}
         >
           {grade}
         </div>
+
 
         <div className="text-3xl font-bold text-white mt-1">
 
@@ -273,124 +339,21 @@ function ScoreRing({
 
         </div>
 
-        <div className="text-[9px] uppercase tracking-[0.22em] text-gray-600 mt-2">
+
+        <p className="text-[8px] uppercase tracking-[0.22em] text-gray-600 mt-2">
           Security posture
-        </div>
+        </p>
 
       </div>
 
     </div>
+
   );
 }
 
 
 /* ============================================================
-   MINI BAR CHART
-   ============================================================ */
-
-function MiniBarChart({
-  categories,
-}: {
-  categories: ScorecardResponse['sub_categories'];
-}) {
-
-  return (
-
-    <div className="space-y-4">
-
-      {categories.map(
-        (category, index) => {
-
-          const Icon =
-            DOMAIN_ICONS[
-              category.category
-            ] || Shield;
-
-          return (
-
-            <div
-              key={index}
-              className="group"
-            >
-
-              <div className="flex items-center justify-between mb-1.5">
-
-                <div className="flex items-center gap-2 min-w-0">
-
-                  <div className="w-7 h-7 rounded-lg bg-violet-500/[0.08] border border-violet-400/[0.08] flex items-center justify-center">
-
-                    <Icon className="w-3.5 h-3.5 text-violet-400" />
-
-                  </div>
-
-                  <span className="text-xs text-gray-400 truncate">
-
-                    {formatCategory(
-                      category.category
-                    )}
-
-                  </span>
-
-                </div>
-
-                <div className="flex items-center gap-2">
-
-                  <span className="text-xs font-semibold text-gray-300">
-                    {category.score}
-                  </span>
-
-                  <span
-                    className={cn(
-                      'text-[9px] font-bold',
-                      getGradeText(
-                        category.grade
-                      )
-                    )}
-                  >
-                    {category.grade}
-                  </span>
-
-                </div>
-
-              </div>
-
-
-              <div className="h-2 rounded-full bg-white/[0.045] overflow-hidden">
-
-                <div
-                  className={cn(
-                    'h-full rounded-full bg-gradient-to-r transition-all duration-1000',
-                    getScoreBar(
-                      category.grade
-                    )
-                  )}
-                  style={{
-                    width: `${Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        category.score
-                      )
-                    )}%`,
-                  }}
-                />
-
-              </div>
-
-            </div>
-
-          );
-
-        }
-      )}
-
-    </div>
-  );
-}
-
-
-/* ============================================================
-   MAIN SCORECARD
+   MAIN COMPONENT
    ============================================================ */
 
 export default function ScorecardView({
@@ -403,14 +366,37 @@ export default function ScorecardView({
 
 }: ScorecardViewProps) {
 
-  const [downloading, setDownloading] =
-    useState(false);
+  const [
+    downloading,
+    setDownloading,
+  ] = useState(false);
+
+
+  const sortedCategories =
+    [...scorecard.sub_categories]
+      .sort(
+        (a, b) =>
+          a.score -
+          b.score
+      );
+
+
+  const weakest =
+    sortedCategories[0];
+
+
+  const strongest =
+    sortedCategories[
+      sortedCategories.length - 1
+    ];
 
 
   const handleDownload =
     async () => {
 
-      setDownloading(true);
+      setDownloading(
+        true
+      );
 
       try {
 
@@ -418,32 +404,18 @@ export default function ScorecardView({
 
       } finally {
 
-        setDownloading(false);
+        setDownloading(
+          false
+        );
 
       }
 
     };
 
 
-  const weakestCategory =
-    [...scorecard.sub_categories]
-      .sort(
-        (a, b) =>
-          a.score - b.score
-      )[0];
-
-
-  const strongestCategory =
-    [...scorecard.sub_categories]
-      .sort(
-        (a, b) =>
-          b.score - a.score
-      )[0];
-
-
   return (
 
-    <div className="min-h-screen bg-[#05040b] text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#05040b] text-white">
 
 
       {/* ======================================================
@@ -452,11 +424,11 @@ export default function ScorecardView({
 
       <div className="fixed inset-0 pointer-events-none">
 
-        <div className="absolute top-[-180px] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-violet-700/[0.13] blur-[180px]" />
+        <div className="absolute top-[-250px] left-[30%] w-[750px] h-[550px] rounded-full bg-violet-700/[0.09] blur-[180px]" />
 
-        <div className="absolute top-[35%] left-[-200px] w-[500px] h-[500px] rounded-full bg-blue-700/[0.07] blur-[170px]" />
+        <div className="absolute right-[-200px] top-[35%] w-[600px] h-[600px] rounded-full bg-fuchsia-700/[0.04] blur-[180px]" />
 
-        <div className="absolute bottom-[-200px] right-[-100px] w-[550px] h-[550px] rounded-full bg-fuchsia-700/[0.07] blur-[180px]" />
+        <div className="absolute bottom-[-250px] left-[10%] w-[550px] h-[450px] rounded-full bg-blue-700/[0.04] blur-[170px]" />
 
       </div>
 
@@ -464,7 +436,7 @@ export default function ScorecardView({
       {/* GRID */}
 
       <div
-        className="fixed inset-0 opacity-[0.035] pointer-events-none"
+        className="fixed inset-0 opacity-[0.025] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
@@ -474,72 +446,73 @@ export default function ScorecardView({
       />
 
 
-      <div className="relative z-10">
+      <div className="relative z-10 min-h-screen">
 
 
         {/* ====================================================
             HEADER
             ==================================================== */}
 
-        <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#08070e]/80 backdrop-blur-2xl">
+        <header className="h-16 border-b border-white/[0.06] bg-[#07050d]/90 backdrop-blur-xl">
 
-          <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between">
-
-
-            {/* BRAND */}
+          <div className="max-w-[1400px] mx-auto h-full px-5 lg:px-8 flex items-center justify-between">
 
             <div className="flex items-center gap-3">
 
-              <div className="relative">
+              <button
+                type="button"
+                onClick={
+                  onRestart
+                }
+                className="w-8 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/[0.05] transition"
+                aria-label="Back"
+              >
 
-                <div className="absolute inset-0 bg-violet-500/30 blur-xl rounded-full" />
+                <ArrowLeft className="w-3.5 h-3.5" />
 
-                <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
+              </button>
 
-                  <Shield className="w-4 h-4 text-white" />
 
-                </div>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+
+                <Shield className="w-4 h-4 text-white" />
 
               </div>
 
 
               <div>
 
-                <div className="font-semibold text-sm text-white">
+                <p className="text-[10px] font-semibold">
                   CyberCISO
-                </div>
+                </p>
 
-                <div className="text-[9px] uppercase tracking-[0.16em] text-gray-600">
-                  Security Intelligence
-                </div>
+                <p className="text-[7px] text-gray-600 uppercase tracking-[0.2em]">
+                  Security Report
+                </p>
 
               </div>
 
             </div>
 
 
-            {/* RIGHT */}
+            <div className="flex items-center gap-3">
 
-            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2 text-[8px] text-gray-600">
 
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-400/10 bg-emerald-500/[0.05]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
 
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.7)]" />
-
-                <span className="text-[10px] text-emerald-400/80">
-                  Assessment complete
-                </span>
+                Assessment complete
 
               </div>
 
 
-              <div className="px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[10px] text-violet-300">
+              <span className="px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[9px] text-violet-300">
 
                 {formatVertical(
                   scorecard.vertical
                 )}
 
-              </div>
+              </span>
 
             </div>
 
@@ -549,99 +522,97 @@ export default function ScorecardView({
 
 
         {/* ====================================================
-            MAIN
+            PAGE
             ==================================================== */}
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <main className="max-w-[1400px] mx-auto px-5 lg:px-8 py-8">
 
 
-          {/* ==================================================
-              PAGE TITLE
-              ================================================== */}
+          {/* TITLE */}
 
-          <div className="mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-6">
 
-            <div className="flex items-center gap-2 text-violet-400/70 text-[10px] uppercase tracking-[0.22em] mb-2">
+            <div>
 
-              <Sparkles className="w-3.5 h-3.5" />
+              <div className="flex items-center gap-2 mb-2">
 
-              Security Intelligence Report
+                <span className="text-[8px] uppercase tracking-[0.24em] text-violet-400">
+                  Assessment Results
+                </span>
+
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/[0.07] border border-emerald-400/10 text-[7px] text-emerald-400">
+                  COMPLETE
+                </span>
+
+              </div>
+
+
+              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+
+                Security posture
+                <span className="text-violet-400">
+                  .
+                </span>
+
+              </h1>
+
+
+              <p className="text-[10px] text-gray-600 mt-2">
+                Your CyberCISO assessment results and prioritized security insights.
+              </p>
 
             </div>
 
 
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div className="flex items-center gap-2">
 
-              <div>
+              <button
+                type="button"
+                onClick={
+                  handleDownload
+                }
+                disabled={
+                  downloading
+                }
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-violet-400/20 bg-violet-500/[0.08] text-violet-200 hover:bg-violet-500/[0.14] transition disabled:opacity-50 text-[10px] font-medium"
+              >
 
-                <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+                <Download className="w-3.5 h-3.5" />
 
-                  Security posture
+                {downloading
+                  ? 'Generating...'
+                  : 'Download Report'}
 
-                  <span className="text-violet-400">
-                    .
-                  </span>
-
-                </h1>
-
-                <p className="text-gray-600 text-sm mt-2">
-                  Your CyberCISO assessment results and prioritized security insights.
-                </p>
-
-              </div>
-
-
-              <div className="flex items-center gap-2">
-
-                <button
-                  onClick={
-                    handleDownload
-                  }
-                  disabled={
-                    downloading
-                  }
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-violet-400/20 bg-violet-500/[0.08] text-violet-200 hover:bg-violet-500/[0.14] transition disabled:opacity-50 text-xs font-medium"
-                >
-
-                  <Download className="w-3.5 h-3.5" />
-
-                  {downloading
-                    ? 'Generating...'
-                    : 'Download Report'}
-
-                </button>
+              </button>
 
 
-                <button
-                  onClick={
-                    onRestart
-                  }
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-gray-400 hover:text-white hover:bg-white/[0.06] transition text-xs font-medium"
-                >
+              <button
+                type="button"
+                onClick={
+                  onRestart
+                }
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-gray-400 hover:text-white hover:bg-white/[0.06] transition text-[10px] font-medium"
+              >
 
-                  <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5" />
 
-                  New Assessment
+                New Assessment
 
-                </button>
-
-              </div>
+              </button>
 
             </div>
 
           </div>
 
 
-          {/* ==================================================
+          {/* =================================================
               TOP DASHBOARD
-              ================================================== */}
+              ================================================= */}
 
-          <div className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-4 mb-4">
+          <div className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-4 mb-5">
 
 
-            {/* =================================================
-                SCORE PANEL
-                ================================================= */}
+            {/* SCORE */}
 
             <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0911]/90 p-6">
 
@@ -653,11 +624,11 @@ export default function ScorecardView({
 
                   <div>
 
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-gray-600">
+                    <p className="text-[9px] uppercase tracking-[0.18em] text-gray-600">
                       Overall assessment
                     </p>
 
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[8px] text-gray-700 mt-1">
                       Based on 5 security domains
                     </p>
 
@@ -687,26 +658,16 @@ export default function ScorecardView({
 
                   <div
                     className={cn(
-                      'px-3 py-1.5 rounded-full border bg-white/[0.025] text-xs font-medium',
-                      getGradeText(
+                      'px-3 py-1.5 rounded-full border border-white/[0.07] bg-white/[0.025] text-[9px] font-medium',
+                      gradeText(
                         scorecard.overall_grade
                       )
                     )}
                   >
 
-                    {scorecard.overall_grade ===
-                    'A'
-                      ? 'Excellent security posture'
-                      : scorecard.overall_grade ===
-                        'B'
-                      ? 'Good security posture'
-                      : scorecard.overall_grade ===
-                        'C'
-                      ? 'Moderate security posture'
-                      : scorecard.overall_grade ===
-                        'D'
-                      ? 'Needs improvement'
-                      : 'Critical improvements required'}
+                    {gradeDescription(
+                      scorecard.overall_grade
+                    )}
 
                   </div>
 
@@ -717,98 +678,187 @@ export default function ScorecardView({
             </section>
 
 
-            {/* =================================================
-                ANALYTICS
-                ================================================= */}
+            {/* ANALYTICS */}
 
             <section className="rounded-2xl border border-white/[0.08] bg-[#0a0911]/90 p-6">
 
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-5">
 
                 <div>
 
-                  <p className="text-sm font-medium text-gray-200">
+                  <p className="text-[10px] text-gray-300">
                     Security domain analysis
                   </p>
 
-                  <p className="text-[11px] text-gray-600 mt-1">
-                    Comparative score across your security posture
+                  <p className="text-[8px] text-gray-700 mt-1">
+                    Performance across your assessment areas
                   </p>
 
                 </div>
 
 
-                <div className="flex items-center gap-2 text-[10px] text-gray-600">
-
-                  <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
-
-                  5 domains
-
-                </div>
+                <BarChart3 className="w-4 h-4 text-violet-400" />
 
               </div>
 
 
-              <MiniBarChart
-                categories={
-                  scorecard.sub_categories
-                }
-              />
+              <div className="space-y-4">
+
+                {scorecard.sub_categories.map(
+                  (
+                    category
+                  ) => {
+
+                    const Icon =
+                      DOMAIN_ICONS[
+                        category.category
+                      ] || Shield;
+
+                    const score =
+                      Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          category.score
+                        )
+                      );
 
 
-              <div className="grid grid-cols-2 gap-3 mt-6 pt-5 border-t border-white/[0.06]">
+                    return (
+
+                      <div
+                        key={
+                          category.category
+                        }
+                      >
+
+                        <div className="flex items-center justify-between mb-1.5">
+
+                          <div className="flex items-center gap-2.5">
+
+                            <div className="w-7 h-7 rounded-lg bg-violet-500/[0.08] border border-violet-400/[0.08] flex items-center justify-center">
+
+                              <Icon className="w-3.5 h-3.5 text-violet-400" />
+
+                            </div>
 
 
-                {/* STRONGEST */}
+                            <span className="text-[9px] text-gray-400">
+                              {formatCategory(
+                                category.category
+                              )}
+                            </span>
 
-                <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.035] p-3">
+                          </div>
 
-                  <div className="flex items-center gap-2 mb-2">
 
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <div className="flex items-center gap-2">
 
-                    <span className="text-[9px] uppercase tracking-[0.15em] text-emerald-400/70">
+                            <span className="text-[9px] font-semibold text-gray-300">
+                              {category.score}
+                            </span>
+
+                            <span
+                              className={cn(
+                                'text-[8px] font-bold',
+                                gradeText(
+                                  category.grade
+                                )
+                              )}
+                            >
+                              {category.grade}
+                            </span>
+
+                          </div>
+
+                        </div>
+
+
+                        <div className="h-2 rounded-full bg-white/[0.04] overflow-hidden">
+
+                          <div
+                            className={cn(
+                              'h-full rounded-full bg-gradient-to-r transition-all duration-1000',
+                              scoreBarGradient(
+                                category.grade
+                              )
+                            )}
+                            style={{
+                              width:
+                                `${score}%`,
+                            }}
+                          />
+
+                        </div>
+
+                      </div>
+
+                    );
+
+                  }
+                )}
+
+              </div>
+
+
+              {/* INSIGHT BOXES */}
+
+              <div className="grid sm:grid-cols-2 gap-3 mt-5">
+
+                <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-3">
+
+                  <div className="flex items-center gap-2 mb-1">
+
+                    <TrendingUp className="w-3 h-3 text-emerald-400" />
+
+                    <span className="text-[8px] uppercase tracking-wider text-gray-600">
                       Strongest
                     </span>
 
                   </div>
 
-                  <p className="text-xs text-gray-300 font-medium">
-                    {formatCategory(
-                      strongestCategory.category
-                    )}
+                  <p className="text-[10px] text-gray-300">
+                    {strongest
+                      ? formatCategory(
+                          strongest.category
+                        )
+                      : '—'}
                   </p>
 
-                  <p className="text-lg font-semibold text-emerald-300 mt-1">
-                    {strongestCategory.score}
-                  </p>
+                  {strongest && (
+                    <p className="text-[8px] text-emerald-400 mt-1">
+                      {strongest.score}/100
+                    </p>
+                  )}
 
                 </div>
 
 
-                {/* WEAKEST */}
+                <div className="rounded-xl border border-red-400/[0.08] bg-red-500/[0.025] p-3">
 
-                <div className="rounded-xl border border-red-400/[0.08] bg-red-500/[0.035] p-3">
+                  <div className="flex items-center gap-2 mb-1">
 
-                  <div className="flex items-center gap-2 mb-2">
+                    <TriangleAlert className="w-3 h-3 text-red-400" />
 
-                    <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-
-                    <span className="text-[9px] uppercase tracking-[0.15em] text-red-400/70">
+                    <span className="text-[8px] uppercase tracking-wider text-gray-600">
                       Priority
                     </span>
 
                   </div>
 
-                  <p className="text-xs text-gray-300 font-medium">
-                    {formatCategory(
-                      weakestCategory.category
-                    )}
+                  <p className="text-[10px] text-gray-300">
+                    {weakest
+                      ? formatCategory(
+                          weakest.category
+                        )
+                      : '—'}
                   </p>
 
-                  <p className="text-lg font-semibold text-red-300 mt-1">
-                    {weakestCategory.score}
-                  </p>
+                  {weakest && (
+                    <p className="text-[8px] text-red-400 mt-1">
+                      {weakest.score}/100
+                    </p>
+                  )}
 
                 </div>
 
@@ -819,41 +869,38 @@ export default function ScorecardView({
           </div>
 
 
-          {/* ==================================================
-              METRIC STRIP
-              ================================================== */}
+          {/* =================================================
+              SUMMARY STATS
+              ================================================= */}
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
 
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
               <div className="flex items-center gap-2 text-gray-600 mb-2">
 
-                <Activity className="w-3.5 h-3.5 text-violet-400" />
+                <Shield className="w-3.5 h-3.5 text-violet-400" />
 
-                <span className="text-[9px] uppercase tracking-[0.15em]">
-                  Overall score
+                <span className="text-[8px] uppercase tracking-[0.15em]">
+                  Score
                 </span>
 
               </div>
 
               <p className="text-2xl font-semibold text-white">
                 {scorecard.overall_score}
-                <span className="text-xs text-gray-700">
-                  /100
-                </span>
               </p>
 
             </div>
 
 
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
               <div className="flex items-center gap-2 text-gray-600 mb-2">
 
-                <Target className="w-3.5 h-3.5 text-blue-400" />
+                <Target className="w-3.5 h-3.5 text-fuchsia-400" />
 
-                <span className="text-[9px] uppercase tracking-[0.15em]">
+                <span className="text-[8px] uppercase tracking-[0.15em]">
                   Domains
                 </span>
 
@@ -866,13 +913,13 @@ export default function ScorecardView({
             </div>
 
 
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
               <div className="flex items-center gap-2 text-gray-600 mb-2">
 
-                <Calendar className="w-3.5 h-3.5 text-fuchsia-400" />
+                <FileText className="w-3.5 h-3.5 text-blue-400" />
 
-                <span className="text-[9px] uppercase tracking-[0.15em]">
+                <span className="text-[8px] uppercase tracking-[0.15em]">
                   Actions
                 </span>
 
@@ -885,19 +932,19 @@ export default function ScorecardView({
             </div>
 
 
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
 
               <div className="flex items-center gap-2 text-gray-600 mb-2">
 
                 <Lock className="w-3.5 h-3.5 text-emerald-400" />
 
-                <span className="text-[9px] uppercase tracking-[0.15em]">
+                <span className="text-[8px] uppercase tracking-[0.15em]">
                   Framework
                 </span>
 
               </div>
 
-              <p className="text-sm font-semibold text-white mt-1">
+              <p className="text-[13px] font-semibold text-white mt-1">
                 NIST + CIS
               </p>
 
@@ -906,11 +953,11 @@ export default function ScorecardView({
           </div>
 
 
-          {/* ==================================================
-              SUB CATEGORY CARDS
-              ================================================== */}
+          {/* =================================================
+              SECURITY DOMAINS
+              ================================================= */}
 
-          <section className="mb-8">
+          <section className="mb-7">
 
             <div className="flex items-end justify-between mb-4">
 
@@ -926,7 +973,7 @@ export default function ScorecardView({
 
                 </div>
 
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-[9px] text-gray-600 mt-1">
                   Detailed findings across your assessment areas.
                 </p>
 
@@ -938,18 +985,23 @@ export default function ScorecardView({
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
 
               {scorecard.sub_categories.map(
-                (category, index) => {
+                (
+                  category
+                ) => {
 
                   const Icon =
                     DOMAIN_ICONS[
                       category.category
                     ] || Shield;
 
+
                   return (
 
                     <article
-                      key={index}
-                      className="group rounded-2xl border border-white/[0.07] bg-[#0a0911]/80 p-5 hover:border-violet-400/[0.18] hover:bg-white/[0.035] transition-all duration-300"
+                      key={
+                        category.category
+                      }
+                      className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/90 p-5 hover:border-violet-400/[0.18] transition-all"
                     >
 
                       <div className="flex items-start justify-between mb-5">
@@ -962,15 +1014,16 @@ export default function ScorecardView({
 
                           </div>
 
+
                           <div>
 
-                            <h3 className="text-sm font-medium text-gray-200">
+                            <h3 className="text-[11px] font-medium text-gray-200">
                               {formatCategory(
                                 category.category
                               )}
                             </h3>
 
-                            <p className="text-[10px] text-gray-600 mt-0.5">
+                            <p className="text-[8px] text-gray-600 mt-0.5">
                               Security domain
                             </p>
 
@@ -981,22 +1034,17 @@ export default function ScorecardView({
 
                         <div
                           className={cn(
-                            'w-8 h-8 rounded-lg border flex items-center justify-center text-xs font-bold',
-                            getGradeText(
+                            'w-8 h-8 rounded-lg border border-white/[0.07] bg-white/[0.025] flex items-center justify-center text-[10px] font-bold',
+                            gradeText(
                               category.grade
-                            ),
-                            'border-white/[0.07] bg-white/[0.025]'
+                            )
                           )}
                         >
-
                           {category.grade}
-
                         </div>
 
                       </div>
 
-
-                      {/* SCORE */}
 
                       <div className="flex items-end justify-between mb-2">
 
@@ -1006,86 +1054,66 @@ export default function ScorecardView({
                             {category.score}
                           </span>
 
-                          <span className="text-xs text-gray-700 ml-1">
+                          <span className="text-[9px] text-gray-700 ml-1">
                             /100
                           </span>
 
                         </div>
 
-                        <span
-                          className={cn(
-                            'text-[10px] font-medium',
-                            getGradeText(
-                              category.grade
-                            )
-                          )}
-                        >
-
-                          {category.grade ===
-                          'A'
-                            ? 'Excellent'
-                            : category.grade ===
-                              'B'
-                            ? 'Good'
-                            : category.grade ===
-                              'C'
-                            ? 'Moderate'
-                            : category.grade ===
-                              'D'
-                            ? 'Weak'
-                            : 'Critical'}
-
-                        </span>
-
                       </div>
 
 
-                      <div className="h-2 rounded-full bg-white/[0.05] overflow-hidden mb-5">
+                      <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden mb-4">
 
                         <div
                           className={cn(
                             'h-full rounded-full bg-gradient-to-r',
-                            getScoreBar(
+                            scoreBarGradient(
                               category.grade
                             )
                           )}
                           style={{
-                            width: `${category.score}%`,
+                            width:
+                              `${Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  category.score
+                                )
+                              )}%`,
                           }}
                         />
 
                       </div>
 
 
-                      {/* FINDINGS */}
-
-                      <div>
-
-                        <p className="text-[9px] uppercase tracking-[0.16em] text-gray-600 mb-3">
-                          Key findings
-                        </p>
-
+                      {category.findings.length > 0 && (
 
                         <div className="space-y-2">
 
+                          <p className="text-[8px] uppercase tracking-[0.16em] text-gray-700">
+                            Findings
+                          </p>
+
+
                           {category.findings
-                            .slice(0, 4)
+                            .slice(0, 3)
                             .map(
                               (
                                 finding,
-                                findingIndex
+                                index
                               ) => (
 
                                 <div
                                   key={
-                                    findingIndex
+                                    index
                                   }
-                                  className="flex items-start gap-2"
+                                  className="flex gap-2"
                                 >
 
                                   <span className="w-1 h-1 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
 
-                                  <p className="text-xs text-gray-500 leading-relaxed">
+                                  <p className="text-[8px] leading-relaxed text-gray-600">
                                     {finding}
                                   </p>
 
@@ -1096,40 +1124,7 @@ export default function ScorecardView({
 
                         </div>
 
-                      </div>
-
-
-                      {/* REFERENCES */}
-
-                      <div className="mt-5 pt-4 border-t border-white/[0.05] space-y-1.5">
-
-                        <p className="text-[9px] text-gray-700">
-
-                          <span className="text-gray-500 font-medium">
-                            NIST
-                          </span>
-
-                          {' '}
-                          {category.nist_references.join(
-                            ', '
-                          )}
-
-                        </p>
-
-                        <p className="text-[9px] text-gray-700">
-
-                          <span className="text-gray-500 font-medium">
-                            CIS
-                          </span>
-
-                          {' '}
-                          {category.cis_references.join(
-                            ', '
-                          )}
-
-                        </p>
-
-                      </div>
+                      )}
 
                     </article>
 
@@ -1143,191 +1138,147 @@ export default function ScorecardView({
           </section>
 
 
-          {/* ==================================================
+          {/* =================================================
               REMEDIATION PLAN
-              ================================================== */}
+              ================================================= */}
 
-          <section className="mb-8">
+          <section className="mb-7">
 
-            <div className="flex items-end justify-between mb-4">
+            <div className="flex items-center gap-2 mb-1">
 
-              <div>
+              <Sparkles className="w-4 h-4 text-violet-400" />
 
-                <div className="flex items-center gap-2">
-
-                  <Calendar className="w-4 h-4 text-fuchsia-400" />
-
-                  <h2 className="text-lg font-semibold text-gray-200">
-                    30-day remediation plan
-                  </h2>
-
-                </div>
-
-                <p className="text-xs text-gray-600 mt-1">
-                  Prioritized actions generated from your assessment.
-                </p>
-
-              </div>
-
-
-              <div className="hidden sm:flex items-center gap-2 text-[10px] text-gray-600">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400" />
-
-                Prioritized by risk
-
-              </div>
+              <h2 className="text-lg font-semibold text-gray-200">
+                Prioritized remediation plan
+              </h2>
 
             </div>
 
-
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/80 overflow-hidden">
-
-              <div className="divide-y divide-white/[0.05]">
-
-                {scorecard.remediation_plan.map(
-                  (
-                    action,
-                    index
-                  ) => (
-
-                    <div
-                      key={index}
-                      className="p-5 hover:bg-white/[0.025] transition"
-                    >
-
-                      <div className="flex items-start gap-4">
+            <p className="text-[9px] text-gray-600 mb-4">
+              Recommended actions based on your assessment findings.
+            </p>
 
 
-                        {/* DAY */}
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/90 overflow-hidden">
 
-                        <div className="hidden sm:flex flex-col items-center w-12 flex-shrink-0">
+              {scorecard.remediation_plan.map(
+                (
+                  action,
+                  index
+                ) => (
 
-                          <div className="w-9 h-9 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
+                  <div
+                    key={`${action.day}-${index}`}
+                    className="group flex gap-4 p-5 border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.02] transition"
+                  >
 
-                            <span className="text-xs font-semibold text-violet-300">
-                              {action.day}
-                            </span>
+                    <div className="flex flex-col items-center">
 
-                          </div>
+                      <div className="w-9 h-9 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
 
-                          <span className="text-[8px] uppercase tracking-wider text-gray-700 mt-1">
-                            Day
-                          </span>
+                        <span className="text-[10px] font-semibold text-violet-300">
+                          {action.day}
+                        </span>
 
-                        </div>
+                      </div>
 
+                      <span className="text-[7px] uppercase tracking-wider text-gray-700 mt-1">
+                        Day
+                      </span>
 
-                        {/* CONTENT */}
-
-                        <div className="flex-1 min-w-0">
-
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-
-                            <span className="sm:hidden text-[9px] text-gray-600">
-                              Day {action.day}
-                            </span>
-
-                            <span
-                              className={cn(
-                                'px-2 py-1 rounded-md text-[9px] font-semibold',
-                                getPriorityColor(
-                                  action.priority
-                                )
-                              )}
-                            >
-
-                              {action.priority}
-
-                            </span>
-
-                            <span className="px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.05] text-[9px] text-gray-500">
-
-                              {formatCategory(
-                                action.category
-                              )}
-
-                            </span>
-
-                          </div>
+                    </div>
 
 
-                          <p className="text-sm text-gray-300 leading-relaxed font-medium">
+                    <div className="flex-1 min-w-0">
 
-                            {action.action}
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
 
-                          </p>
-
-
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[9px] text-gray-700">
-
-                            <span>
-
-                              <span className="text-gray-500">
-                                NIST:
-                              </span>
-
-                              {' '}
-
-                              {action.nist_function}
-
-                              {' / '}
-
-                              {action.nist_category}
-
-                            </span>
+                        <span
+                          className={cn(
+                            'px-2 py-1 rounded-md text-[8px] font-semibold',
+                            getPriorityColor(
+                              action.priority
+                            )
+                          )}
+                        >
+                          {action.priority}
+                        </span>
 
 
-                            <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
+                        <span className="px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.05] text-[8px] text-gray-500">
+                          {formatCategory(
+                            action.category
+                          )}
+                        </span>
+
+                      </div>
 
 
-                            <span>
-
-                              <span className="text-gray-500">
-                                CIS:
-                              </span>
-
-                              {' '}
-
-                              {action.cis_control}
-
-                            </span>
+                      <p className="text-[11px] text-gray-300 leading-relaxed font-medium">
+                        {action.action}
+                      </p>
 
 
-                            <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[8px] text-gray-700">
+
+                        <span>
+
+                          <span className="text-gray-500">
+                            NIST:
+                          </span>{' '}
+
+                          {action.nist_function}
+
+                          {' / '}
+
+                          {action.nist_category}
+
+                        </span>
 
 
-                            <span>
-                              {action.effort_estimate}
-                            </span>
-
-                          </div>
-
-                        </div>
+                        <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
 
 
-                        <ArrowUpRight className="w-4 h-4 text-gray-700 group-hover:text-violet-400 flex-shrink-0" />
+                        <span>
+
+                          <span className="text-gray-500">
+                            CIS:
+                          </span>{' '}
+
+                          {action.cis_control}
+
+                        </span>
+
+
+                        <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
+
+
+                        <span>
+                          {action.effort_estimate}
+                        </span>
 
                       </div>
 
                     </div>
 
-                  )
-                )}
 
-              </div>
+                    <ArrowUpRight className="w-4 h-4 text-gray-700 group-hover:text-violet-400 flex-shrink-0 transition" />
+
+                  </div>
+
+                )
+              )}
 
             </div>
 
           </section>
 
 
-          {/* ==================================================
-              FRAMEWORK CARD
-              ================================================== */}
+          {/* =================================================
+              FRAMEWORKS
+              ================================================= */}
 
-          <section className="grid md:grid-cols-2 gap-4 mb-8">
-
+          <section className="grid md:grid-cols-2 gap-4 mb-6">
 
             <div className="rounded-2xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-5">
 
@@ -1339,13 +1290,14 @@ export default function ScorecardView({
 
                 </div>
 
+
                 <div>
 
-                  <p className="text-sm font-medium text-gray-200">
+                  <p className="text-[11px] font-medium text-gray-200">
                     NIST CSF 2.0
                   </p>
 
-                  <p className="text-[10px] text-gray-600">
+                  <p className="text-[8px] text-gray-600">
                     Framework-aligned assessment
                   </p>
 
@@ -1354,7 +1306,7 @@ export default function ScorecardView({
               </div>
 
 
-              <div className="flex items-center gap-2 text-xs text-emerald-400/70">
+              <div className="flex items-center gap-2 text-[8px] text-emerald-400/70">
 
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
 
@@ -1371,18 +1323,19 @@ export default function ScorecardView({
 
                 <div className="w-9 h-9 rounded-xl bg-blue-500/[0.08] border border-blue-400/10 flex items-center justify-center">
 
-                  <Shield className="w-4 h-4 text-blue-400" />
+                  <Lock className="w-4 h-4 text-blue-400" />
 
                 </div>
 
+
                 <div>
 
-                  <p className="text-sm font-medium text-gray-200">
+                  <p className="text-[11px] font-medium text-gray-200">
                     CIS Controls v8
                   </p>
 
-                  <p className="text-[10px] text-gray-600">
-                    Control recommendations mapped
+                  <p className="text-[8px] text-gray-600">
+                    Security controls referenced
                   </p>
 
                 </div>
@@ -1390,11 +1343,11 @@ export default function ScorecardView({
               </div>
 
 
-              <div className="flex items-center gap-2 text-xs text-blue-400/70">
+              <div className="flex items-center gap-2 text-[8px] text-blue-400/70">
 
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
 
-                Actionable control references
+                Recommendations mapped to controls
 
               </div>
 
@@ -1403,91 +1356,42 @@ export default function ScorecardView({
           </section>
 
 
-          {/* ==================================================
-              DISCLAIMER
-              ================================================== */}
+          {/* FOOTER */}
 
-          <div className="rounded-2xl border border-amber-400/[0.08] bg-amber-500/[0.035] p-5 mb-10">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 border-t border-white/[0.05]">
 
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-2 text-[8px] text-gray-700">
 
-              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <Lock className="w-3 h-3 text-emerald-400" />
 
-              <div>
-
-                <p className="text-xs font-semibold text-amber-300">
-                  Assessment disclaimer
-                </p>
-
-                <p className="text-[11px] text-amber-200/50 mt-1.5 leading-relaxed">
-
-                  This assessment is based on self-reported information and should not replace a professional security audit. NIST CSF 2.0 and CIS Controls v8 references are thematic; verify control numbers against official publications.
-
-                </p>
-
-              </div>
+              Assessment generated securely by CyberCISO AI.
 
             </div>
 
-          </div>
 
+            <button
+              type="button"
+              onClick={
+                onRestart
+              }
+              className="flex items-center gap-2 text-[8px] text-gray-600 hover:text-violet-300 transition"
+            >
+
+              <RotateCcw className="w-3 h-3" />
+
+              Start another assessment
+
+              <ChevronRight className="w-3 h-3" />
+
+            </button>
+
+          </div>
 
         </main>
-
-
-        {/* ====================================================
-            FOOTER
-            ==================================================== */}
-
-        <footer className="border-t border-white/[0.06] py-8">
-
-          <div className="max-w-7xl mx-auto px-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-
-            <div className="flex items-center gap-2">
-
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
-
-                <Shield className="w-3 h-3 text-white" />
-
-              </div>
-
-              <span className="text-xs text-gray-600">
-                CyberCISO
-              </span>
-
-            </div>
-
-
-            <div className="flex items-center gap-4 text-[9px] text-gray-700">
-
-              <span>
-                NIST CSF 2.0
-              </span>
-
-              <span>
-                •
-              </span>
-
-              <span>
-                CIS Controls v8
-              </span>
-
-              <span>
-                •
-              </span>
-
-              <span>
-                Virtual CISO
-              </span>
-
-            </div>
-
-          </div>
-
-        </footer>
 
       </div>
 
     </div>
+
   );
 }
