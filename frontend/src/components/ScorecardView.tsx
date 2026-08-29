@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import {
   AlertCircle,
   ArrowUpRight,
@@ -452,6 +454,7 @@ export default function ScorecardView({
 
         <main className="mx-auto max-w-7xl px-5 py-8">
           {/* TITLE */}
+
           <div className="mb-8">
             <div className="mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[0.25em] text-violet-400/70">
               <Target className="h-3.5 w-3.5" />
@@ -512,6 +515,7 @@ export default function ScorecardView({
 
           <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
             {/* SCORE */}
+
             <section className="rounded-2xl border border-white/[0.07] bg-[#08070e]/90 p-6">
               <div className="mb-5 flex items-center justify-between">
                 <div>
@@ -550,6 +554,7 @@ export default function ScorecardView({
             </section>
 
             {/* ANALYSIS */}
+
             <section className="rounded-2xl border border-white/[0.07] bg-[#08070e]/90 p-6">
               <div className="mb-6 flex items-start justify-between">
                 <div>
@@ -950,6 +955,7 @@ export default function ScorecardView({
         </main>
 
         {/* FOOTER */}
+
         <footer className="mt-10 border-t border-white/[0.06] py-8">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-5 sm:flex-row">
             <div className="flex items-center gap-2">
