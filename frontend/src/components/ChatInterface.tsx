@@ -95,28 +95,136 @@ const SECURITY_DOMAINS = [
 ];
 
 /* ============================================================
+   DOMAIN COMPLETION RULES
+   ============================================================ */
+
+/*
+ * There are 6 assessment questions.
+ *
+ * Retail:
+ *   Q1 + Q2 -> Access Control
+ *   Q3       -> Data Backup
+ *   Q4       -> Network Security
+ *   Q5       -> Email & Phishing
+ *   Q6       -> Incident Response
+ *
+ * Healthcare:
+ *   Q1 + Q2 -> Access Control
+ *   Q3       -> Data Backup
+ *   Q4 + Q5 -> Network Security
+ *   Q6       -> Incident Response
+ *
+ * Professional Services:
+ *   Q1 + Q2 -> Access Control
+ *   Q3       -> Data Backup
+ *   Q4       -> Network Security
+ *   Q5       -> Email & Phishing
+ *   Q6       -> Incident Response
+ */
+
+const DOMAIN_COMPLETION: Record<
+  Vertical,
+  Record<string, number>
+> = {
+  retail: {
+    access: 2,
+    backup: 3,
+    network: 4,
+    phishing: 5,
+    incident: 6,
+  },
+
+  healthcare_clinic: {
+    access: 2,
+    backup: 3,
+    network: 5,
+    phishing: 0,
+    incident: 6,
+  },
+
+  professional_services: {
+    access: 2,
+    backup: 3,
+    network: 4,
+    phishing: 5,
+    incident: 6,
+  },
+};
+
+/*
+ * Healthcare does not have a dedicated phishing question.
+ * We still keep the five standard security domains in the UI,
+ * but mark Email & Phishing as not applicable for that vertical.
+ */
+const DOMAIN_APPLICABILITY: Record<
+  Vertical,
+  Record<string, boolean>
+> = {
+  retail: {
+    access: true,
+    backup: true,
+    network: true,
+    phishing: true,
+    incident: true,
+  },
+
+  healthcare_clinic: {
+    access: true,
+    backup: true,
+    network: true,
+    phishing: false,
+    incident: true,
+  },
+
+  professional_services: {
+    access: true,
+    backup: true,
+    network: true,
+    phishing: true,
+    incident: true,
+  },
+};
+
+/* ============================================================
    HELPERS
    ============================================================ */
 
 function stripMarkdown(text: string): string {
   let output = text
-    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
-    .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, '')
-    .replace(/<thought>[\s\S]*?<\/thought>\s*/gi, '')
-    .replace(/<\/?(think|thinking|thought|answer)[^>]*>/gi, '');
+    .replace(
+      /<think>[\s\S]*?<\/think>\s*/gi,
+      ''
+    )
+    .replace(
+      /<thinking>[\s\S]*?<\/thinking>\s*/gi,
+      ''
+    )
+    .replace(
+      /<thought>[\s\S]*?<\/thought>\s*/gi,
+      ''
+    )
+    .replace(
+      /<\/?(think|thinking|thought|answer)[^>]*>/gi,
+      ''
+    );
 
   const lines = output.split('\n');
 
   let responseIndex = -1;
 
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim().toLowerCase() === 'response') {
+    if (
+      lines[i].trim().toLowerCase() ===
+      'response'
+    ) {
       responseIndex = i;
     }
   }
 
   if (responseIndex !== -1) {
-    output = lines.slice(responseIndex + 1).join('\n');
+    output = lines
+      .slice(responseIndex + 1)
+      .join('\n');
   }
 
   return output
@@ -148,10 +256,14 @@ function playNotificationSound() {
       return;
     }
 
-    const context = new AudioContextClass();
+    const context =
+      new AudioContextClass();
 
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
+    const oscillator =
+      context.createOscillator();
+
+    const gain =
+      context.createGain();
 
     oscillator.connect(gain);
     gain.connect(context.destination);
@@ -178,12 +290,20 @@ function playNotificationSound() {
       context.currentTime + 0.3
     );
 
-    oscillator.start(context.currentTime);
-    oscillator.stop(context.currentTime + 0.3);
+    oscillator.start(
+      context.currentTime
+    );
 
-    oscillator.addEventListener('ended', () => {
-      void context.close();
-    });
+    oscillator.stop(
+      context.currentTime + 0.3
+    );
+
+    oscillator.addEventListener(
+      'ended',
+      () => {
+        void context.close();
+      }
+    );
   } catch {
     // Audio is optional and should never break the chat.
   }
@@ -308,7 +428,9 @@ function VerticalPicker({
                   <button
                     key={id}
                     type="button"
-                    onClick={() => onSelect(id)}
+                    onClick={() =>
+                      onSelect(id)
+                    }
                     className="group text-left p-6 rounded-2xl border border-white/[0.08] bg-white/[0.025] hover:bg-violet-500/[0.06] hover:border-violet-400/20 transition-all"
                   >
                     <div className="text-3xl mb-5">
@@ -447,7 +569,9 @@ export default function ChatInterface({
       messages.length === 0 &&
       !interviewComplete
     ) {
-      handleVerticalSelect(initialVertical);
+      handleVerticalSelect(
+        initialVertical
+      );
     }
   }, [
     initialVertical,
@@ -468,7 +592,10 @@ export default function ChatInterface({
       const lastMessage =
         messages[messages.length - 1];
 
-      if (lastMessage?.role === 'assistant') {
+      if (
+        lastMessage?.role ===
+        'assistant'
+      ) {
         playNotificationSound();
       }
     }
@@ -528,6 +655,7 @@ export default function ChatInterface({
      * The conversation_history contains only messages
      * that existed BEFORE the current message.
      */
+
     const conversationHistory =
       messages.map((message) => ({
         role: message.role,
@@ -596,7 +724,8 @@ export default function ChatInterface({
 
             if (
               parsed &&
-              typeof parsed === 'object' &&
+              typeof parsed ===
+                'object' &&
               parsed.overall_grade &&
               parsed.sub_categories
             ) {
@@ -657,6 +786,7 @@ export default function ChatInterface({
        * Remove only the optimistic message.
        * Preserve all previous conversation history.
        */
+
       setMessages((previous) => {
         if (previous.length === 0) {
           return previous;
@@ -755,22 +885,148 @@ export default function ChatInterface({
         message.role === 'user'
     );
 
+  /*
+   * The first user message is the business-selection message.
+   * Every user message after that is an actual assessment answer.
+   */
+
   const answeredQuestions =
     Math.max(
       0,
       userMessages.length - 1
     );
 
-  const estimatedQuestions = 10;
+  /*
+   * The backend currently asks 6 assessment questions.
+   * Use the actual number instead of the old hard-coded 10.
+   */
+
+  const totalQuestions = 6;
 
   const progress = Math.min(
     100,
     Math.round(
       (answeredQuestions /
-        estimatedQuestions) *
+        totalQuestions) *
         100
     )
   );
+
+  /*
+   * Number of domains that have been completed.
+   * "Not applicable" domains are excluded.
+   */
+
+  const completedDomainCount =
+    vertical
+      ? SECURITY_DOMAINS.filter(
+          (domain) => {
+            const applicable =
+              DOMAIN_APPLICABILITY[
+                vertical
+              ][domain.key];
+
+            if (!applicable) {
+              return false;
+            }
+
+            const requiredQuestion =
+              DOMAIN_COMPLETION[
+                vertical
+              ][domain.key];
+
+            return (
+              requiredQuestion > 0 &&
+              answeredQuestions >=
+                requiredQuestion
+            );
+          }
+        ).length
+      : 0;
+
+  const applicableDomainCount =
+    vertical
+      ? SECURITY_DOMAINS.filter(
+          (domain) =>
+            DOMAIN_APPLICABILITY[
+              vertical
+            ][domain.key]
+        ).length
+      : SECURITY_DOMAINS.length;
+
+  /* ==========================================================
+     DOMAIN STATUS HELPER
+     ========================================================== */
+
+  const getDomainStatus = (
+    domainKey: string
+  ) => {
+    if (!vertical) {
+      return 'upcoming';
+    }
+
+    const applicable =
+      DOMAIN_APPLICABILITY[
+        vertical
+      ][domainKey];
+
+    if (!applicable) {
+      return 'not-applicable';
+    }
+
+    const requiredQuestion =
+      DOMAIN_COMPLETION[
+        vertical
+      ][domainKey];
+
+    if (
+      requiredQuestion > 0 &&
+      answeredQuestions >=
+        requiredQuestion
+    ) {
+      return 'complete';
+    }
+
+    /*
+     * Find the next domain currently being assessed.
+     * This is based on the next unanswered question.
+     */
+
+    const nextQuestionNumber =
+      answeredQuestions + 1;
+
+    const activeDomain =
+      SECURITY_DOMAINS.find(
+        (domain) => {
+          if (
+            !DOMAIN_APPLICABILITY[
+              vertical
+            ][domain.key]
+          ) {
+            return false;
+          }
+
+          const completion =
+            DOMAIN_COMPLETION[
+              vertical
+            ][domain.key];
+
+          return (
+            completion >=
+            nextQuestionNumber
+          );
+        }
+      );
+
+    if (
+      activeDomain?.key ===
+      domainKey
+    ) {
+      return 'active';
+    }
+
+    return 'upcoming';
+  };
 
   /* ==========================================================
      MAIN ASSESSMENT UI
@@ -848,6 +1104,7 @@ export default function ChatInterface({
 
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/[0.045] text-gray-200">
               <Activity className="w-3.5 h-3.5 text-violet-400" />
+
               <span className="text-xs">
                 Live assessment
               </span>
@@ -956,6 +1213,7 @@ export default function ChatInterface({
                     </p>
 
                     <p className="text-[8px] text-gray-700">
+                      of {totalQuestions}{' '}
                       answered
                     </p>
                   </div>
@@ -996,7 +1254,8 @@ export default function ChatInterface({
                     </p>
 
                     <p className="text-xl font-semibold text-gray-200 mt-1">
-                      5
+                      {completedDomainCount}/
+                      {applicableDomainCount}
                     </p>
 
                     <p className="text-[8px] text-gray-700">
@@ -1217,18 +1476,82 @@ export default function ChatInterface({
                         const Icon =
                           domain.icon;
 
+                        const status =
+                          getDomainStatus(
+                            domain.key
+                          );
+
+                        const isComplete =
+                          status ===
+                          'complete';
+
+                        const isActive =
+                          status ===
+                          'active';
+
+                        const isNotApplicable =
+                          status ===
+                          'not-applicable';
+
                         return (
                           <div
                             key={domain.key}
-                            className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2.5"
+                            className={cn(
+                              'flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all duration-300',
+                              isComplete &&
+                                'border-emerald-400/10 bg-emerald-500/[0.035]',
+                              isActive &&
+                                'border-violet-400/15 bg-violet-500/[0.035]',
+                              status ===
+                                'upcoming' &&
+                                'border-white/[0.05] bg-black/10',
+                              isNotApplicable &&
+                                'border-white/[0.04] bg-black/5 opacity-45'
+                            )}
                           >
-                            <Icon className="h-3.5 w-3.5 text-violet-400" />
+                            {isComplete ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                            ) : (
+                              <Icon
+                                className={cn(
+                                  'h-3.5 w-3.5 flex-shrink-0 transition-colors',
+                                  isActive
+                                    ? 'text-violet-400'
+                                    : 'text-gray-700'
+                                )}
+                              />
+                            )}
 
-                            <span className="text-[10px] text-gray-500">
+                            <span
+                              className={cn(
+                                'text-[10px] transition-colors',
+                                isComplete &&
+                                  'text-emerald-300',
+                                isActive &&
+                                  'text-gray-300',
+                                status ===
+                                  'upcoming' &&
+                                  'text-gray-600',
+                                isNotApplicable &&
+                                  'text-gray-700'
+                              )}
+                            >
                               {domain.label}
                             </span>
 
-                            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-400/60" />
+                            {isNotApplicable ? (
+                              <span className="ml-auto text-[8px] text-gray-700">
+                                N/A
+                              </span>
+                            ) : isComplete ? (
+                              <span className="ml-auto text-[8px] text-emerald-400/70">
+                                Complete
+                              </span>
+                            ) : isActive ? (
+                              <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-400 shadow-[0_0_7px_rgba(167,139,250,.7)]" />
+                            ) : (
+                              <span className="ml-auto h-1.5 w-1.5 rounded-full bg-gray-700/70" />
+                            )}
                           </div>
                         );
                       }
