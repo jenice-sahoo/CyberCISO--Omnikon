@@ -4,10 +4,9 @@
   "outputDirectory": "frontend/out",
   "framework": null,
   "functions": {
-    "api/**/*.py": {
+    "api/index.py": {
       "maxDuration": 15,
-      "memory": 1024,
-      "excludeFiles": "{**/__pycache__/**,**/*.pyc,**/.pytest_cache/**,**/tests/**,backend/**,frontend/**,backend.log}"
+      "memory": 1024
     }
   },
   "rewrites": [
