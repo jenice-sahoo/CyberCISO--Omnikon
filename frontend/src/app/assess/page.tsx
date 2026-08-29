@@ -23,7 +23,11 @@ function AssessContent() {
       ? (verticalParam as Vertical)
       : undefined;
 
-  return <ChatInterface initialVertical={initialVertical} />;
+  return (
+    <ChatInterface
+      initialVertical={initialVertical}
+    />
+  );
 }
 
 export default function AssessPage() {
