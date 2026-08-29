@@ -1,1397 +1,1122 @@
 'use client';
 
 import {
+  useCallback,
+  useEffect,
+  useRef,
   useState,
+  type FormEvent,
+  type KeyboardEvent,
 } from 'react';
 
 import {
+  Activity,
   ArrowLeft,
   ArrowUpRight,
   BarChart3,
   CheckCircle2,
-  ChevronRight,
   Database,
-  Download,
-  FileText,
   Lock,
   Mail,
   Network,
   RotateCcw,
+  Send,
   Shield,
   Siren,
   Sparkles,
-  Target,
-  TrendingUp,
-  TriangleAlert,
 } from 'lucide-react';
 
-import {
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+
+import type {
+  ChatMessage,
+  ChatRequest,
   ScorecardResponse,
+  Vertical,
 } from '@/types';
 
+import { sendChatMessage } from '@/lib/api';
+
 import {
-  cn,
   formatCategory,
   formatVertical,
-  getPriorityColor,
+  generateSessionId,
 } from '@/lib/utils';
 
+import { exportScorecardToPDF } from '@/lib/pdf';
+
+import ScorecardView from './ScorecardView';
 
 /* ============================================================
-   PROPS
+   FIRST QUESTIONS
    ============================================================ */
 
-interface ScorecardViewProps {
+const FIRST_QUESTIONS: Record<Vertical, string> = {
+  retail:
+    'How many employees access your point-of-sale systems and inventory databases?',
 
-  scorecard:
-    ScorecardResponse;
+  healthcare_clinic:
+    'How many staff members access your electronic health records (EHR) system?',
 
-  onRestart:
-    () => void;
-
-  onDownloadPDF:
-    () => Promise<void>;
-
-}
-
-
-/* ============================================================
-   DOMAIN ICONS
-   ============================================================ */
-
-const DOMAIN_ICONS: Record<
-  string,
-  typeof Shield
-> = {
-
-  access_control:
-    Shield,
-
-  data_backup:
-    Database,
-
-  network_security:
-    Network,
-
-  email_phishing_readiness:
-    Mail,
-
-  email_phishing:
-    Mail,
-
-  incident_response:
-    Siren,
-
+  professional_services:
+    'How many team members access client confidential data on a regular basis?',
 };
 
-
 /* ============================================================
-   GRADE HELPERS
+   VALID VERTICALS
    ============================================================ */
 
-function gradeText(
-  grade: string
-): string {
-
-  switch (
-    grade.toUpperCase()
-  ) {
-
-    case 'A':
-      return 'text-emerald-300';
-
-    case 'B':
-      return 'text-violet-300';
-
-    case 'C':
-      return 'text-amber-300';
-
-    case 'D':
-      return 'text-orange-300';
-
-    case 'F':
-      return 'text-red-300';
-
-    default:
-      return 'text-violet-300';
-
-  }
-
-}
-
-
-function gradeGradient(
-  grade: string
-): string {
-
-  switch (
-    grade.toUpperCase()
-  ) {
-
-    case 'A':
-      return 'from-emerald-400 via-cyan-400 to-blue-400';
-
-    case 'B':
-      return 'from-violet-400 via-fuchsia-400 to-blue-400';
-
-    case 'C':
-      return 'from-amber-300 via-yellow-400 to-orange-400';
-
-    case 'D':
-      return 'from-orange-400 via-red-400 to-pink-400';
-
-    case 'F':
-      return 'from-red-500 via-rose-500 to-fuchsia-500';
-
-    default:
-      return 'from-violet-400 to-blue-400';
-
-  }
-
-}
-
-
-function scoreBarGradient(
-  grade: string
-): string {
-
-  switch (
-    grade.toUpperCase()
-  ) {
-
-    case 'A':
-      return 'from-emerald-400 to-cyan-400';
-
-    case 'B':
-      return 'from-violet-500 to-blue-500';
-
-    case 'C':
-      return 'from-amber-400 to-orange-400';
-
-    case 'D':
-      return 'from-orange-400 to-red-500';
-
-    case 'F':
-      return 'from-red-500 to-fuchsia-500';
-
-    default:
-      return 'from-violet-500 to-blue-500';
-
-  }
-
-}
-
-
-function gradeDescription(
-  grade: string
-): string {
-
-  switch (
-    grade.toUpperCase()
-  ) {
-
-    case 'A':
-      return 'Excellent security posture';
-
-    case 'B':
-      return 'Good security posture';
-
-    case 'C':
-      return 'Moderate security posture';
-
-    case 'D':
-      return 'Needs improvement';
-
-    case 'F':
-      return 'Critical improvements required';
-
-    default:
-      return 'Assessment completed';
-
-  }
-
-}
-
+const VALID_VERTICALS: Vertical[] = [
+  'retail',
+  'healthcare_clinic',
+  'professional_services',
+];
 
 /* ============================================================
-   SCORE RING
+   SECURITY DOMAINS
    ============================================================ */
 
-function ScoreRing({
-  score,
-  grade,
-}: {
-  score: number;
-  grade: string;
-}) {
+const SECURITY_DOMAINS = [
+  {
+    key: 'access_control',
+    label: 'Access Control',
+    icon: Shield,
+  },
+  {
+    key: 'data_backup',
+    label: 'Data Backup',
+    icon: Database,
+  },
+  {
+    key: 'network_security',
+    label: 'Network Security',
+    icon: Network,
+  },
+  {
+    key: 'email_phishing',
+    label: 'Email & Phishing',
+    icon: Mail,
+  },
+  {
+    key: 'incident_response',
+    label: 'Incident Response',
+    icon: Siren,
+  },
+];
 
-  const radius =
-    82;
+/* ============================================================
+   CLEAN AI RESPONSE
+   ============================================================ */
 
-  const circumference =
-    2 *
-    Math.PI *
-    radius;
+function cleanResponse(text: string): string {
+  let output = text || '';
 
-  const safeScore =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        score
-      )
-    );
+  output = output
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, '')
+    .replace(/<thought>[\s\S]*?<\/thought>\s*/gi, '')
+    .replace(/<\/?(think|thinking|thought|answer)[^>]*>/gi, '');
 
-  const offset =
-    circumference -
-    (safeScore /
-      100) *
-      circumference;
+  const lines = output.split('\n');
 
+  let responseIndex = -1;
 
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i].trim().toLowerCase() === 'response') {
+      responseIndex = i;
+    }
+  }
+
+  if (responseIndex !== -1) {
+    output = lines
+      .slice(responseIndex + 1)
+      .join('\n');
+  }
+
+  return output
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .trim();
+}
+
+/* ============================================================
+   TYPING INDICATOR
+   ============================================================ */
+
+function TypingIndicator() {
   return (
-
-    <div className="relative w-60 h-60 mx-auto">
-
-      <div className="absolute inset-10 rounded-full bg-violet-600/20 blur-[55px]" />
-
-
-      <svg
-        viewBox="0 0 200 200"
-        className="relative w-full h-full -rotate-90"
-      >
-
-        <circle
-          cx="100"
-          cy="100"
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.05)"
-          strokeWidth="10"
-        />
-
-
-        <circle
-          cx="100"
-          cy="100"
-          r={radius}
-          fill="none"
-          stroke="url(#scoreGradient)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="transition-all duration-1000"
-        />
-
-
-        <defs>
-
-          <linearGradient
-            id="scoreGradient"
-            x1="0%"
-            y1="0%"
-            x2="100%"
-            y2="100%"
-          >
-
-            <stop
-              offset="0%"
-              stopColor="#8b5cf6"
-            />
-
-            <stop
-              offset="50%"
-              stopColor="#d946ef"
-            />
-
-            <stop
-              offset="100%"
-              stopColor="#38bdf8"
-            />
-
-          </linearGradient>
-
-        </defs>
-
-      </svg>
-
-
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-
-        <div
-          className={cn(
-            'text-6xl font-black bg-gradient-to-br bg-clip-text text-transparent',
-            gradeGradient(grade)
-          )}
-        >
-          {grade}
-        </div>
-
-
-        <div className="text-3xl font-bold text-white mt-1">
-
-          {score}
-
-          <span className="text-sm text-gray-600 font-normal">
-            /100
-          </span>
-
-        </div>
-
-
-        <p className="text-[8px] uppercase tracking-[0.22em] text-gray-600 mt-2">
-          Security posture
-        </p>
-
+    <div className="flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-lg shadow-violet-500/20">
+        <Shield className="h-4 w-4 text-white" />
       </div>
 
+      <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.035] px-5 py-4">
+        <div className="flex gap-1.5">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400 [animation-delay:150ms]" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400 [animation-delay:300ms]" />
+        </div>
+      </div>
     </div>
-
   );
 }
 
+/* ============================================================
+   BUSINESS PICKER
+   ============================================================ */
+
+function VerticalPicker({
+  onSelect,
+}: {
+  onSelect: (vertical: Vertical) => void;
+}) {
+  const businesses = [
+    {
+      id: 'retail' as Vertical,
+      label: 'Retail',
+      description:
+        'POS systems, inventory, payment networks and staff access.',
+      icon: '🛍️',
+    },
+    {
+      id: 'healthcare_clinic' as Vertical,
+      label: 'Healthcare Clinic',
+      description:
+        'EHR systems, patient data, HIPAA and device security.',
+      icon: '🏥',
+    },
+    {
+      id: 'professional_services' as Vertical,
+      label: 'Professional Services',
+      description:
+        'Client data, cloud applications, IP and secure communications.',
+      icon: '💼',
+    },
+  ];
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#05040b] text-white">
+      {/* Glow */}
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute left-1/2 top-[-200px] h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-violet-700/[0.12] blur-[180px]" />
+
+        <div className="absolute bottom-[-200px] right-[-150px] h-[500px] w-[500px] rounded-full bg-blue-700/[0.08] blur-[160px]" />
+      </div>
+
+      {/* Grid */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.035]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+        }}
+      />
+
+      <div className="relative z-10 min-h-screen">
+        <header className="border-b border-white/[0.06] px-6 py-5">
+          <div className="mx-auto flex max-w-6xl items-center justify-between">
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-sm text-gray-500 transition hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Link>
+
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Secure & Private
+            </div>
+          </div>
+        </header>
+
+        <main className="flex min-h-[calc(100vh-77px)] items-center justify-center px-6 py-16">
+          <div className="w-full max-w-5xl">
+            <div className="mb-12 text-center">
+              <div className="mb-5 flex justify-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-xl shadow-violet-500/20">
+                  <Shield className="h-6 w-6 text-white" />
+                </div>
+              </div>
+
+              <p className="mb-3 text-[10px] uppercase tracking-[0.3em] text-violet-400">
+                CyberCISO AI
+              </p>
+
+              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                Select your business
+                <span className="text-violet-400">.</span>
+              </h1>
+
+              <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-gray-500">
+                We&apos;ll tailor your security assessment to your
+                industry&apos;s specific risks and requirements.
+              </p>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-3">
+              {businesses.map((business) => (
+                <button
+                  key={business.id}
+                  type="button"
+                  onClick={() =>
+                    onSelect(business.id)
+                  }
+                  className="group rounded-2xl border border-white/[0.08] bg-white/[0.025] p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/25 hover:bg-violet-500/[0.06] hover:shadow-2xl hover:shadow-violet-950/30"
+                >
+                  <div className="mb-5 text-3xl">
+                    {business.icon}
+                  </div>
+
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-semibold text-gray-200 group-hover:text-white">
+                      {business.label}
+                    </span>
+
+                    <ArrowUpRight className="h-4 w-4 text-gray-700 transition group-hover:text-violet-400" />
+                  </div>
+
+                  <p className="text-xs leading-6 text-gray-600">
+                    {business.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-5 text-[10px] text-gray-700">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                NIST CSF 2.0
+              </span>
+
+              <span>•</span>
+
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                CIS Controls v8
+              </span>
+
+              <span>•</span>
+
+              <span>~10 minutes</span>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
 
-export default function ScorecardView({
+export default function ChatInterface() {
+  const searchParams = useSearchParams();
 
-  scorecard,
+  const verticalParam =
+    searchParams.get('vertical');
 
-  onRestart,
+  const urlVertical: Vertical | null =
+    verticalParam &&
+    VALID_VERTICALS.includes(
+      verticalParam as Vertical
+    )
+      ? (verticalParam as Vertical)
+      : null;
 
-  onDownloadPDF,
+  const [vertical, setVertical] =
+    useState<Vertical | null>(
+      urlVertical
+    );
 
-}: ScorecardViewProps) {
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([]);
 
-  const [
-    downloading,
-    setDownloading,
-  ] = useState(false);
+  const [input, setInput] =
+    useState('');
 
+  const [isLoading, setIsLoading] =
+    useState(false);
 
-  const sortedCategories =
-    [...scorecard.sub_categories]
-      .sort(
-        (a, b) =>
-          a.score -
-          b.score
-      );
+  const [error, setError] =
+    useState<string | null>(null);
 
+  const [scorecard, setScorecard] =
+    useState<ScorecardResponse | null>(null);
 
-  const weakest =
-    sortedCategories[0];
+  const [interviewComplete, setInterviewComplete] =
+    useState(false);
 
+  const [sessionId] =
+    useState(() => generateSessionId());
 
-  const strongest =
-    sortedCategories[
-      sortedCategories.length - 1
-    ];
+  const inputRef =
+    useRef<HTMLTextAreaElement>(null);
 
+  /* ==========================================================
+     SELECT BUSINESS
+     ========================================================== */
 
-  const handleDownload =
-    async () => {
-
-      setDownloading(
-        true
-      );
-
-      try {
-
-        await onDownloadPDF();
-
-      } finally {
-
-        setDownloading(
-          false
+  const handleVerticalSelect = useCallback(
+    (selectedVertical: Vertical) => {
+      const businessName =
+        formatVertical(
+          selectedVertical
         );
 
+      setVertical(
+        selectedVertical
+      );
+
+      setScorecard(null);
+
+      setInterviewComplete(false);
+
+      setError(null);
+
+      setMessages([
+        {
+          role: 'user',
+          content:
+            `I want an assessment for ${businessName}`,
+        },
+        {
+          role: 'assistant',
+          content:
+            `Sure! Here is your ${businessName} assessment.`,
+        },
+        {
+          role: 'assistant',
+          content:
+            FIRST_QUESTIONS[
+              selectedVertical
+            ],
+        },
+      ]);
+    },
+    []
+  );
+
+  /* ==========================================================
+     AUTO INITIALIZE FROM URL
+     ========================================================== */
+
+  useEffect(() => {
+    if (
+      urlVertical &&
+      messages.length === 0 &&
+      !interviewComplete
+    ) {
+      handleVerticalSelect(
+        urlVertical
+      );
+    }
+  }, [
+    urlVertical,
+    messages.length,
+    interviewComplete,
+    handleVerticalSelect,
+  ]);
+
+  /* ==========================================================
+     FOCUS INPUT
+     ========================================================== */
+
+  useEffect(() => {
+    if (
+      vertical &&
+      !interviewComplete
+    ) {
+      const timer =
+        window.setTimeout(() => {
+          inputRef.current?.focus();
+        }, 150);
+
+      return () =>
+        window.clearTimeout(timer);
+    }
+
+    return undefined;
+  }, [
+    messages,
+    vertical,
+    interviewComplete,
+  ]);
+
+  /* ==========================================================
+     SEND MESSAGE
+     ========================================================== */
+
+  const handleSubmit = async (
+    event: FormEvent
+  ) => {
+    event.preventDefault();
+
+    if (
+      !input.trim() ||
+      isLoading ||
+      !vertical
+    ) {
+      return;
+    }
+
+    const userMessage =
+      input.trim();
+
+    setInput('');
+
+    setError(null);
+
+    setIsLoading(true);
+
+    const history =
+      [...messages];
+
+    setMessages((previous) => [
+      ...previous,
+      {
+        role: 'user',
+        content: userMessage,
+      },
+    ]);
+
+    try {
+      const request: ChatRequest = {
+        message: userMessage,
+
+        conversation_history:
+          history,
+
+        vertical: vertical,
+
+        session_id:
+          sessionId,
+      };
+
+      const response =
+        await sendChatMessage(
+          request
+        );
+
+      let receivedScorecard =
+        response.scorecard;
+
+      /* --------------------------------------------
+         JSON FALLBACK
+         -------------------------------------------- */
+
+      if (
+        !receivedScorecard &&
+        response.response
+      ) {
+        try {
+          let raw =
+            response.response.trim();
+
+          if (
+            raw.startsWith('```')
+          ) {
+            raw = raw
+              .replace(
+                /^```(?:json)?\s*/i,
+                ''
+              )
+              .replace(
+                /\s*```$/,
+                ''
+              )
+              .trim();
+          }
+
+          if (
+            raw.startsWith('{')
+          ) {
+            const parsed: unknown =
+              JSON.parse(raw);
+
+            if (
+              typeof parsed ===
+                'object' &&
+              parsed !== null &&
+              'overall_grade' in
+                parsed &&
+              'sub_categories' in
+                parsed
+            ) {
+              receivedScorecard =
+                parsed as ScorecardResponse;
+            }
+          }
+        } catch {
+          // Normal text response.
+        }
       }
 
+      /* --------------------------------------------
+         SCORECARD
+         -------------------------------------------- */
+
+      if (
+        receivedScorecard
+      ) {
+        setScorecard(
+          receivedScorecard
+        );
+
+        setInterviewComplete(
+          true
+        );
+
+        setVertical(
+          receivedScorecard.vertical
+        );
+      } else {
+        /* ------------------------------------------
+           NORMAL AI MESSAGE
+           ------------------------------------------ */
+
+        setMessages((previous) => [
+          ...previous,
+          {
+            role: 'assistant',
+            content:
+              cleanResponse(
+                response.response
+              ),
+          },
+        ]);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to send message'
+      );
+
+      setMessages(
+        (previous) =>
+          previous.slice(
+            0,
+            -1
+          )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /* ==========================================================
+     ENTER TO SEND
+     ========================================================== */
+
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLTextAreaElement>
+  ) => {
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+
+      if (!isLoading) {
+        void handleSubmit(
+          event as unknown as FormEvent
+        );
+      }
+    }
+  };
+
+  /* ==========================================================
+     RESTART
+     ========================================================== */
+
+  const handleRestart = () => {
+    window.location.href = '/';
+  };
+
+  /* ==========================================================
+     PDF
+     ========================================================== */
+
+  const handleDownloadPDF =
+    async () => {
+      if (!scorecard) {
+        return;
+      }
+
+      try {
+        await exportScorecardToPDF(
+          scorecard
+        );
+      } catch {
+        setError(
+          'Failed to generate PDF'
+        );
+      }
     };
 
+  /* ==========================================================
+     BUSINESS PICKER
+     ========================================================== */
+
+  if (
+    !vertical &&
+    !interviewComplete
+  ) {
+    return (
+      <VerticalPicker
+        onSelect={
+          handleVerticalSelect
+        }
+      />
+    );
+  }
+
+  /* ==========================================================
+     SCORECARD
+     ========================================================== */
+
+  if (
+    interviewComplete &&
+    scorecard
+  ) {
+    return (
+      <div className="min-h-screen bg-[#05040b]">
+        <ScorecardView
+          scorecard={scorecard}
+          onRestart={
+            handleRestart
+          }
+          onDownloadPDF={
+            handleDownloadPDF
+          }
+        />
+      </div>
+    );
+  }
+
+  /* ==========================================================
+     PROGRESS
+     ========================================================== */
+
+  const answeredQuestions =
+    Math.max(
+      0,
+      messages.filter(
+        (message) =>
+          message.role === 'user'
+      ).length - 1
+    );
+
+  const estimatedQuestions = 10;
+
+  const progress =
+    Math.min(
+      100,
+      Math.round(
+        (answeredQuestions /
+          estimatedQuestions) *
+          100
+      )
+    );
+
+  const businessName =
+    vertical
+      ? formatVertical(
+          vertical
+        )
+      : 'Security Assessment';
+
+  /* ==========================================================
+     MAIN CHAT UI
+     ========================================================== */
 
   return (
-
     <div className="min-h-screen bg-[#05040b] text-white">
+      {/* Background */}
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute left-[30%] top-[-250px] h-[600px] w-[700px] rounded-full bg-violet-700/[0.08] blur-[180px]" />
 
-
-      {/* ======================================================
-          BACKGROUND
-          ====================================================== */}
-
-      <div className="fixed inset-0 pointer-events-none">
-
-        <div className="absolute top-[-250px] left-[30%] w-[750px] h-[550px] rounded-full bg-violet-700/[0.09] blur-[180px]" />
-
-        <div className="absolute right-[-200px] top-[35%] w-[600px] h-[600px] rounded-full bg-fuchsia-700/[0.04] blur-[180px]" />
-
-        <div className="absolute bottom-[-250px] left-[10%] w-[550px] h-[450px] rounded-full bg-blue-700/[0.04] blur-[170px]" />
-
+        <div className="absolute right-[-200px] top-[35%] h-[500px] w-[500px] rounded-full bg-blue-700/[0.05] blur-[170px]" />
       </div>
 
-
-      {/* GRID */}
-
       <div
-        className="fixed inset-0 opacity-[0.025] pointer-events-none"
+        className="pointer-events-none fixed inset-0 opacity-[0.025]"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)',
-          backgroundSize:
-            '48px 48px',
+          backgroundSize: '48px 48px',
         }}
       />
 
-
-      <div className="relative z-10 min-h-screen">
-
-
-        {/* ====================================================
-            HEADER
-            ==================================================== */}
-
-        <header className="h-16 border-b border-white/[0.06] bg-[#07050d]/90 backdrop-blur-xl">
-
-          <div className="max-w-[1400px] mx-auto h-full px-5 lg:px-8 flex items-center justify-between">
-
-            <div className="flex items-center gap-3">
-
-              <button
-                type="button"
-                onClick={
-                  onRestart
-                }
-                className="w-8 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/[0.05] transition"
-                aria-label="Back"
-              >
-
-                <ArrowLeft className="w-3.5 h-3.5" />
-
-              </button>
-
-
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-
-                <Shield className="w-4 h-4 text-white" />
-
+      <div className="relative z-10">
+        {/* HEADER */}
+        <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#07060d]/90 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+            <Link
+              href="/"
+              className="flex items-center gap-3"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-lg shadow-violet-500/20">
+                <Shield className="h-4 w-4 text-white" />
               </div>
-
 
               <div>
-
-                <p className="text-[10px] font-semibold">
+                <div className="text-sm font-semibold">
                   CyberCISO
-                </p>
+                </div>
 
-                <p className="text-[7px] text-gray-600 uppercase tracking-[0.2em]">
-                  Security Report
-                </p>
-
+                <div className="text-[8px] uppercase tracking-[0.18em] text-gray-600">
+                  AI security advisor
+                </div>
               </div>
-
-            </div>
-
+            </Link>
 
             <div className="flex items-center gap-3">
+              <div className="hidden items-center gap-2 rounded-full border border-violet-400/10 bg-violet-500/[0.06] px-3 py-1.5 sm:flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
 
-              <div className="hidden sm:flex items-center gap-2 text-[8px] text-gray-600">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-
-                Assessment complete
-
+                <span className="text-[10px] text-violet-300">
+                  {businessName}
+                </span>
               </div>
 
-
-              <span className="px-3 py-1.5 rounded-full border border-violet-400/10 bg-violet-500/[0.06] text-[9px] text-violet-300">
-
-                {formatVertical(
-                  scorecard.vertical
-                )}
-
-              </span>
-
+              <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Secure
+              </div>
             </div>
-
           </div>
-
         </header>
 
-
-        {/* ====================================================
-            PAGE
-            ==================================================== */}
-
-        <main className="max-w-[1400px] mx-auto px-5 lg:px-8 py-8">
-
-
+        {/* MAIN */}
+        <main className="mx-auto max-w-6xl px-5 py-8">
           {/* TITLE */}
+          <div className="mb-7">
+            <div className="mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[0.25em] text-violet-400/70">
+              <Activity className="h-3.5 w-3.5" />
+              Adaptive security interview
+            </div>
 
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-6">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Security assessment
+                  <span className="text-violet-400">
+                    .
+                  </span>
+                </h1>
 
-            <div>
-
-              <div className="flex items-center gap-2 mb-2">
-
-                <span className="text-[8px] uppercase tracking-[0.24em] text-violet-400">
-                  Assessment Results
-                </span>
-
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/[0.07] border border-emerald-400/10 text-[7px] text-emerald-400">
-                  COMPLETE
-                </span>
-
+                <p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">
+                  Tell CyberCISO about your security
+                  setup and we&apos;ll build your
+                  personalized security posture.
+                </p>
               </div>
 
-
-              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-
-                Security posture
-                <span className="text-violet-400">
-                  .
-                </span>
-
-              </h1>
-
-
-              <p className="text-[10px] text-gray-600 mt-2">
-                Your CyberCISO assessment results and prioritized security insights.
-              </p>
-
+              <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                <BarChart3 className="h-3.5 w-3.5 text-violet-400" />
+                {progress}% complete
+              </div>
             </div>
-
-
-            <div className="flex items-center gap-2">
-
-              <button
-                type="button"
-                onClick={
-                  handleDownload
-                }
-                disabled={
-                  downloading
-                }
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-violet-400/20 bg-violet-500/[0.08] text-violet-200 hover:bg-violet-500/[0.14] transition disabled:opacity-50 text-[10px] font-medium"
-              >
-
-                <Download className="w-3.5 h-3.5" />
-
-                {downloading
-                  ? 'Generating...'
-                  : 'Download Report'}
-
-              </button>
-
-
-              <button
-                type="button"
-                onClick={
-                  onRestart
-                }
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-gray-400 hover:text-white hover:bg-white/[0.06] transition text-[10px] font-medium"
-              >
-
-                <RotateCcw className="w-3.5 h-3.5" />
-
-                New Assessment
-
-              </button>
-
-            </div>
-
           </div>
 
+          {/* PROGRESS */}
+          <div className="mb-5 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[9px] uppercase tracking-[0.2em] text-gray-600">
+                Assessment progress
+              </span>
 
-          {/* =================================================
-              TOP DASHBOARD
-              ================================================= */}
+              <span className="text-[10px] text-violet-300">
+                {answeredQuestions} / ~{estimatedQuestions}
+              </span>
+            </div>
 
-          <div className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-4 mb-5">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-400 transition-all duration-500"
+                style={{
+                  width: `${progress}%`,
+                }}
+              />
+            </div>
+          </div>
 
-
-            {/* SCORE */}
-
-            <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0911]/90 p-6">
-
-              <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-violet-600/[0.08] blur-3xl" />
-
-              <div className="relative">
-
-                <div className="flex items-center justify-between mb-2">
+          {/* LAYOUT */}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+            {/* CHAT */}
+            <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#08070e]/90">
+              {/* Chat header */}
+              <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-lg shadow-violet-500/20">
+                    <Shield className="h-4 w-4 text-white" />
+                  </div>
 
                   <div>
-
-                    <p className="text-[9px] uppercase tracking-[0.18em] text-gray-600">
-                      Overall assessment
+                    <p className="text-xs font-semibold text-gray-200">
+                      CyberCISO AI
                     </p>
 
-                    <p className="text-[8px] text-gray-700 mt-1">
-                      Based on 5 security domains
+                    <p className="text-[8px] text-gray-600">
+                      Online • Security analyst
                     </p>
-
                   </div>
-
-
-                  <div className="w-8 h-8 rounded-lg bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                    <Shield className="w-4 h-4 text-violet-400" />
-
-                  </div>
-
                 </div>
 
-
-                <ScoreRing
-                  score={
-                    scorecard.overall_score
-                  }
-                  grade={
-                    scorecard.overall_grade
-                  }
-                />
-
-
-                <div className="flex justify-center mt-1">
-
-                  <div
-                    className={cn(
-                      'px-3 py-1.5 rounded-full border border-white/[0.07] bg-white/[0.025] text-[9px] font-medium',
-                      gradeText(
-                        scorecard.overall_grade
-                      )
-                    )}
-                  >
-
-                    {gradeDescription(
-                      scorecard.overall_grade
-                    )}
-
-                  </div>
-
+                <div className="flex items-center gap-2 text-[9px] text-emerald-400/70">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Live
                 </div>
-
               </div>
 
-            </section>
-
-
-            {/* ANALYTICS */}
-
-            <section className="rounded-2xl border border-white/[0.08] bg-[#0a0911]/90 p-6">
-
-              <div className="flex items-center justify-between mb-5">
-
-                <div>
-
-                  <p className="text-[10px] text-gray-300">
-                    Security domain analysis
-                  </p>
-
-                  <p className="text-[8px] text-gray-700 mt-1">
-                    Performance across your assessment areas
-                  </p>
-
-                </div>
-
-
-                <BarChart3 className="w-4 h-4 text-violet-400" />
-
-              </div>
-
-
-              <div className="space-y-4">
-
-                {scorecard.sub_categories.map(
-                  (
-                    category
-                  ) => {
-
-                    const Icon =
-                      DOMAIN_ICONS[
-                        category.category
-                      ] || Shield;
-
-                    const score =
-                      Math.max(
-                        0,
-                        Math.min(
-                          100,
-                          category.score
-                        )
-                      );
-
+              {/* MESSAGES
+                  No internal overflow.
+                  No fixed height.
+                  Browser/page scrolls naturally.
+              */}
+              <div className="space-y-5 px-5 py-6">
+                {messages.map(
+                  (message, index) => {
+                    const isUser =
+                      message.role ===
+                      'user';
 
                     return (
-
                       <div
-                        key={
-                          category.category
-                        }
+                        key={`${message.role}-${index}`}
+                        className={`flex gap-3 ${
+                          isUser
+                            ? 'justify-end'
+                            : ''
+                        }`}
                       >
-
-                        <div className="flex items-center justify-between mb-1.5">
-
-                          <div className="flex items-center gap-2.5">
-
-                            <div className="w-7 h-7 rounded-lg bg-violet-500/[0.08] border border-violet-400/[0.08] flex items-center justify-center">
-
-                              <Icon className="w-3.5 h-3.5 text-violet-400" />
-
-                            </div>
-
-
-                            <span className="text-[9px] text-gray-400">
-                              {formatCategory(
-                                category.category
-                              )}
-                            </span>
-
+                        {!isUser && (
+                          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-600">
+                            <Shield className="h-4 w-4 text-white" />
                           </div>
+                        )}
 
-
-                          <div className="flex items-center gap-2">
-
-                            <span className="text-[9px] font-semibold text-gray-300">
-                              {category.score}
-                            </span>
-
-                            <span
-                              className={cn(
-                                'text-[8px] font-bold',
-                                gradeText(
-                                  category.grade
-                                )
-                              )}
-                            >
-                              {category.grade}
-                            </span>
-
-                          </div>
-
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                            isUser
+                              ? 'rounded-br-md bg-gradient-to-br from-violet-600 to-violet-500 text-white shadow-lg shadow-violet-500/10'
+                              : 'rounded-bl-md border border-white/[0.07] bg-white/[0.035] text-gray-300'
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap text-[13px] leading-6">
+                            {
+                              message.content
+                            }
+                          </p>
                         </div>
-
-
-                        <div className="h-2 rounded-full bg-white/[0.04] overflow-hidden">
-
-                          <div
-                            className={cn(
-                              'h-full rounded-full bg-gradient-to-r transition-all duration-1000',
-                              scoreBarGradient(
-                                category.grade
-                              )
-                            )}
-                            style={{
-                              width:
-                                `${score}%`,
-                            }}
-                          />
-
-                        </div>
-
                       </div>
-
                     );
-
                   }
                 )}
 
+                {isLoading && (
+                  <TypingIndicator />
+                )}
+
+                {error && (
+                  <div className="flex justify-center">
+                    <div className="rounded-xl border border-red-400/10 bg-red-500/[0.05] px-4 py-3 text-xs text-red-300">
+                      {error}
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* INPUT */}
+              <div className="px-5 pb-5">
+                <form
+                  onSubmit={
+                    handleSubmit
+                  }
+                  className="rounded-2xl border border-violet-400/10 bg-[#0d0b16] p-2.5 transition focus-within:border-violet-400/25"
+                >
+                  <div className="flex items-end gap-2">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={(event) =>
+                        setInput(
+                          event.target.value
+                        )
+                      }
+                      onKeyDown={
+                        handleKeyDown
+                      }
+                      rows={2}
+                      disabled={
+                        isLoading
+                      }
+                      placeholder="Tell CyberCISO about your security..."
+                      className="min-h-[52px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-gray-200 outline-none placeholder:text-gray-700"
+                    />
 
-              {/* INSIGHT BOXES */}
-
-              <div className="grid sm:grid-cols-2 gap-3 mt-5">
-
-                <div className="rounded-xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-3">
-
-                  <div className="flex items-center gap-2 mb-1">
-
-                    <TrendingUp className="w-3 h-3 text-emerald-400" />
-
-                    <span className="text-[8px] uppercase tracking-wider text-gray-600">
-                      Strongest
-                    </span>
-
+                    <button
+                      type="submit"
+                      disabled={
+                        isLoading ||
+                        !input.trim()
+                      }
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20 transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      {isLoading ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
 
-                  <p className="text-[10px] text-gray-300">
-                    {strongest
-                      ? formatCategory(
-                          strongest.category
-                        )
-                      : '—'}
-                  </p>
-
-                  {strongest && (
-                    <p className="text-[8px] text-emerald-400 mt-1">
-                      {strongest.score}/100
-                    </p>
-                  )}
-
-                </div>
-
-
-                <div className="rounded-xl border border-red-400/[0.08] bg-red-500/[0.025] p-3">
-
-                  <div className="flex items-center gap-2 mb-1">
-
-                    <TriangleAlert className="w-3 h-3 text-red-400" />
-
-                    <span className="text-[8px] uppercase tracking-wider text-gray-600">
-                      Priority
+                  <div className="mt-2 flex items-center justify-between px-2 text-[8px] text-gray-700">
+                    <span>
+                      Enter to send • Shift + Enter for new line
                     </span>
 
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="h-3 w-3" />
+                      Private session
+                    </span>
                   </div>
-
-                  <p className="text-[10px] text-gray-300">
-                    {weakest
-                      ? formatCategory(
-                          weakest.category
-                        )
-                      : '—'}
-                  </p>
-
-                  {weakest && (
-                    <p className="text-[8px] text-red-400 mt-1">
-                      {weakest.score}/100
-                    </p>
-                  )}
-
-                </div>
-
+                </form>
               </div>
-
             </section>
 
-          </div>
-
-
-          {/* =================================================
-              SUMMARY STATS
-              ================================================= */}
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <Shield className="w-3.5 h-3.5 text-violet-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Score
-                </span>
-
-              </div>
-
-              <p className="text-2xl font-semibold text-white">
-                {scorecard.overall_score}
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <Target className="w-3.5 h-3.5 text-fuchsia-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Domains
-                </span>
-
-              </div>
-
-              <p className="text-2xl font-semibold text-white">
-                {scorecard.sub_categories.length}
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <FileText className="w-3.5 h-3.5 text-blue-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Actions
-                </span>
-
-              </div>
-
-              <p className="text-2xl font-semibold text-white">
-                {scorecard.remediation_plan.length}
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-white/[0.07] bg-[#090811]/90 p-4">
-
-              <div className="flex items-center gap-2 text-gray-600 mb-2">
-
-                <Lock className="w-3.5 h-3.5 text-emerald-400" />
-
-                <span className="text-[8px] uppercase tracking-[0.15em]">
-                  Framework
-                </span>
-
-              </div>
-
-              <p className="text-[13px] font-semibold text-white mt-1">
-                NIST + CIS
-              </p>
-
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              SECURITY DOMAINS
-              ================================================= */}
-
-          <section className="mb-7">
-
-            <div className="flex items-end justify-between mb-4">
-
-              <div>
-
-                <div className="flex items-center gap-2">
-
-                  <Target className="w-4 h-4 text-violet-400" />
-
-                  <h2 className="text-lg font-semibold text-gray-200">
-                    Security domains
-                  </h2>
-
-                </div>
-
-                <p className="text-[9px] text-gray-600 mt-1">
-                  Detailed findings across your assessment areas.
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-              {scorecard.sub_categories.map(
-                (
-                  category
-                ) => {
-
-                  const Icon =
-                    DOMAIN_ICONS[
-                      category.category
-                    ] || Shield;
-
-
-                  return (
-
-                    <article
-                      key={
-                        category.category
-                      }
-                      className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/90 p-5 hover:border-violet-400/[0.18] transition-all"
-                    >
-
-                      <div className="flex items-start justify-between mb-5">
-
-                        <div className="flex items-center gap-3">
-
-                          <div className="w-10 h-10 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                            <Icon className="w-4 h-4 text-violet-400" />
-
-                          </div>
-
-
-                          <div>
-
-                            <h3 className="text-[11px] font-medium text-gray-200">
-                              {formatCategory(
-                                category.category
-                              )}
-                            </h3>
-
-                            <p className="text-[8px] text-gray-600 mt-0.5">
-                              Security domain
-                            </p>
-
-                          </div>
-
-                        </div>
-
-
-                        <div
-                          className={cn(
-                            'w-8 h-8 rounded-lg border border-white/[0.07] bg-white/[0.025] flex items-center justify-center text-[10px] font-bold',
-                            gradeText(
-                              category.grade
-                            )
-                          )}
-                        >
-                          {category.grade}
-                        </div>
-
-                      </div>
-
-
-                      <div className="flex items-end justify-between mb-2">
-
-                        <div>
-
-                          <span className="text-3xl font-semibold text-white">
-                            {category.score}
-                          </span>
-
-                          <span className="text-[9px] text-gray-700 ml-1">
-                            /100
-                          </span>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden mb-4">
-
-                        <div
-                          className={cn(
-                            'h-full rounded-full bg-gradient-to-r',
-                            scoreBarGradient(
-                              category.grade
-                            )
-                          )}
-                          style={{
-                            width:
-                              `${Math.max(
-                                0,
-                                Math.min(
-                                  100,
-                                  category.score
-                                )
-                              )}%`,
-                          }}
-                        />
-
-                      </div>
-
-
-                      {category.findings.length > 0 && (
-
-                        <div className="space-y-2">
-
-                          <p className="text-[8px] uppercase tracking-[0.16em] text-gray-700">
-                            Findings
-                          </p>
-
-
-                          {category.findings
-                            .slice(0, 3)
-                            .map(
-                              (
-                                finding,
-                                index
-                              ) => (
-
-                                <div
-                                  key={
-                                    index
-                                  }
-                                  className="flex gap-2"
-                                >
-
-                                  <span className="w-1 h-1 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
-
-                                  <p className="text-[8px] leading-relaxed text-gray-600">
-                                    {finding}
-                                  </p>
-
-                                </div>
-
-                              )
-                            )}
-
-                        </div>
-
-                      )}
-
-                    </article>
-
-                  );
-
-                }
-              )}
-
-            </div>
-
-          </section>
-
-
-          {/* =================================================
-              REMEDIATION PLAN
-              ================================================= */}
-
-          <section className="mb-7">
-
-            <div className="flex items-center gap-2 mb-1">
-
-              <Sparkles className="w-4 h-4 text-violet-400" />
-
-              <h2 className="text-lg font-semibold text-gray-200">
-                Prioritized remediation plan
-              </h2>
-
-            </div>
-
-            <p className="text-[9px] text-gray-600 mb-4">
-              Recommended actions based on your assessment findings.
-            </p>
-
-
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0a0911]/90 overflow-hidden">
-
-              {scorecard.remediation_plan.map(
-                (
-                  action,
-                  index
-                ) => (
-
-                  <div
-                    key={`${action.day}-${index}`}
-                    className="group flex gap-4 p-5 border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.02] transition"
-                  >
-
-                    <div className="flex flex-col items-center">
-
-                      <div className="w-9 h-9 rounded-xl bg-violet-500/[0.08] border border-violet-400/10 flex items-center justify-center">
-
-                        <span className="text-[10px] font-semibold text-violet-300">
-                          {action.day}
-                        </span>
-
-                      </div>
-
-                      <span className="text-[7px] uppercase tracking-wider text-gray-700 mt-1">
-                        Day
-                      </span>
-
-                    </div>
-
-
-                    <div className="flex-1 min-w-0">
-
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-
-                        <span
-                          className={cn(
-                            'px-2 py-1 rounded-md text-[8px] font-semibold',
-                            getPriorityColor(
-                              action.priority
-                            )
-                          )}
-                        >
-                          {action.priority}
-                        </span>
-
-
-                        <span className="px-2 py-1 rounded-md bg-white/[0.04] border border-white/[0.05] text-[8px] text-gray-500">
-                          {formatCategory(
-                            action.category
-                          )}
-                        </span>
-
-                      </div>
-
-
-                      <p className="text-[11px] text-gray-300 leading-relaxed font-medium">
-                        {action.action}
-                      </p>
-
-
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[8px] text-gray-700">
-
-                        <span>
-
-                          <span className="text-gray-500">
-                            NIST:
-                          </span>{' '}
-
-                          {action.nist_function}
-
-                          {' / '}
-
-                          {action.nist_category}
-
-                        </span>
-
-
-                        <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
-
-
-                        <span>
-
-                          <span className="text-gray-500">
-                            CIS:
-                          </span>{' '}
-
-                          {action.cis_control}
-
-                        </span>
-
-
-                        <span className="hidden sm:block w-1 h-1 rounded-full bg-gray-800" />
-
-
-                        <span>
-                          {action.effort_estimate}
-                        </span>
-
-                      </div>
-
-                    </div>
-
-
-                    <ArrowUpRight className="w-4 h-4 text-gray-700 group-hover:text-violet-400 flex-shrink-0 transition" />
-
+            {/* RIGHT PANEL */}
+            <aside className="space-y-4">
+              {/* Current assessment */}
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/[0.08]">
+                    <Shield className="h-4 w-4 text-violet-400" />
                   </div>
 
-                )
-              )}
+                  <div>
+                    <p className="text-xs font-medium text-gray-200">
+                      Current assessment
+                    </p>
 
-            </div>
-
-          </section>
-
-
-          {/* =================================================
-              FRAMEWORKS
-              ================================================= */}
-
-          <section className="grid md:grid-cols-2 gap-4 mb-6">
-
-            <div className="rounded-2xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-5">
-
-              <div className="flex items-center gap-3 mb-4">
-
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/[0.08] border border-emerald-400/10 flex items-center justify-center">
-
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-
+                    <p className="text-[9px] text-gray-600">
+                      {businessName}
+                    </p>
+                  </div>
                 </div>
 
+                <div className="rounded-xl border border-white/[0.06] bg-black/10 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[9px] uppercase tracking-[0.15em] text-gray-600">
+                      Progress
+                    </span>
 
-                <div>
+                    <span className="text-xs font-semibold text-violet-300">
+                      {progress}%
+                    </span>
+                  </div>
 
-                  <p className="text-[11px] font-medium text-gray-200">
-                    NIST CSF 2.0
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-400"
+                      style={{
+                        width: `${progress}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Security areas */}
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-gray-200">
+                    Security areas
                   </p>
 
-                  <p className="text-[8px] text-gray-600">
-                    Framework-aligned assessment
+                  <p className="mt-1 text-[9px] text-gray-600">
+                    Covered throughout your interview
                   </p>
-
                 </div>
 
+                <div className="space-y-2">
+                  {SECURITY_DOMAINS.map(
+                    (domain) => {
+                      const Icon =
+                        domain.icon;
+
+                      return (
+                        <div
+                          key={domain.key}
+                          className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2.5"
+                        >
+                          <Icon className="h-3.5 w-3.5 text-violet-400" />
+
+                          <span className="text-[10px] text-gray-500">
+                            {domain.label}
+                          </span>
+
+                          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-400/60" />
+                        </div>
+                      );
+                    }
+                  )}
+                </div>
               </div>
 
+              {/* Frameworks */}
+              <div className="rounded-2xl border border-emerald-400/[0.08] bg-emerald-500/[0.025] p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
 
-              <div className="flex items-center gap-2 text-[8px] text-emerald-400/70">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-
-                Controls referenced in your findings
-
-              </div>
-
-            </div>
-
-
-            <div className="rounded-2xl border border-blue-400/[0.08] bg-blue-500/[0.025] p-5">
-
-              <div className="flex items-center gap-3 mb-4">
-
-                <div className="w-9 h-9 rounded-xl bg-blue-500/[0.08] border border-blue-400/10 flex items-center justify-center">
-
-                  <Lock className="w-4 h-4 text-blue-400" />
-
+                  <span className="text-xs font-medium text-gray-300">
+                    Framework coverage
+                  </span>
                 </div>
 
+                <p className="text-[9px] text-gray-600">
+                  Assessment standards
+                </p>
 
-                <div>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between rounded-lg border border-white/[0.05] bg-black/10 px-3 py-2">
+                    <span className="text-[10px] text-gray-500">
+                      NIST CSF 2.0
+                    </span>
 
-                  <p className="text-[11px] font-medium text-gray-200">
-                    CIS Controls v8
-                  </p>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  </div>
 
-                  <p className="text-[8px] text-gray-600">
-                    Security controls referenced
-                  </p>
+                  <div className="flex items-center justify-between rounded-lg border border-white/[0.05] bg-black/10 px-3 py-2">
+                    <span className="text-[10px] text-gray-500">
+                      CIS Controls v8
+                    </span>
 
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  </div>
                 </div>
-
               </div>
 
-
-              <div className="flex items-center gap-2 text-[8px] text-blue-400/70">
-
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-
-                Recommendations mapped to controls
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {/* FOOTER */}
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 border-t border-white/[0.05]">
-
-            <div className="flex items-center gap-2 text-[8px] text-gray-700">
-
-              <Lock className="w-3 h-3 text-emerald-400" />
-
-              Assessment generated securely by CyberCISO AI.
-
-            </div>
-
-
-            <button
-              type="button"
-              onClick={
-                onRestart
-              }
-              className="flex items-center gap-2 text-[8px] text-gray-600 hover:text-violet-300 transition"
-            >
-
-              <RotateCcw className="w-3 h-3" />
-
-              Start another assessment
-
-              <ChevronRight className="w-3 h-3" />
-
-            </button>
-
+              <Link
+                href="/"
+                className="flex items-center justify-center gap-2 rounded-xl border border-violet-400/10 bg-violet-500/[0.06] px-4 py-3 text-xs text-violet-300 transition hover:bg-violet-500/[0.1]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Start a new assessment
+              </Link>
+            </aside>
           </div>
-
         </main>
-
       </div>
-
     </div>
-
   );
 }
