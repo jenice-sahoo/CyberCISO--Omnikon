@@ -34,7 +34,7 @@ class ChatResponse(BaseModel):
 
 
 # ============================================================
-# ASSESSMENT QUESTIONS
+# ASSESSMENT QUESTION BANK
 # ============================================================
 
 MOCK_QUESTIONS = {
@@ -68,7 +68,8 @@ MOCK_QUESTIONS = {
 
 
 # ============================================================
-# SCORECARD
+# CURRENT SCORECARD
+# NOTE: We will replace this with real scoring next.
 # ============================================================
 
 def mock_scorecard(vertical: Vertical):
@@ -87,7 +88,6 @@ def mock_scorecard(vertical: Vertical):
                 "nist_references": ["PR.AC-1"],
                 "cis_references": ["CIS 5.2"]
             },
-
             {
                 "category": "data_backup",
                 "score": 75,
@@ -98,7 +98,6 @@ def mock_scorecard(vertical: Vertical):
                 "nist_references": ["PR.IP-4"],
                 "cis_references": ["CIS 11.2"]
             },
-
             {
                 "category": "network_security",
                 "score": 65,
@@ -109,7 +108,6 @@ def mock_scorecard(vertical: Vertical):
                 "nist_references": ["PR.AC-5"],
                 "cis_references": ["CIS 12.1"]
             },
-
             {
                 "category": "email_phishing",
                 "score": 80,
@@ -120,7 +118,6 @@ def mock_scorecard(vertical: Vertical):
                 "nist_references": ["PR.AT-1"],
                 "cis_references": ["CIS 14.1"]
             },
-
             {
                 "category": "incident_response",
                 "score": 70,
@@ -144,7 +141,6 @@ def mock_scorecard(vertical: Vertical):
                 "cis_control": "CIS 5.2",
                 "effort_estimate": "2-4 hours"
             },
-
             {
                 "day": 3,
                 "priority": "Critical",
@@ -155,7 +151,6 @@ def mock_scorecard(vertical: Vertical):
                 "cis_control": "CIS 12.1",
                 "effort_estimate": "4-8 hours"
             },
-
             {
                 "day": 7,
                 "priority": "High",
@@ -166,7 +161,6 @@ def mock_scorecard(vertical: Vertical):
                 "cis_control": "CIS 11.3",
                 "effort_estimate": "1-2 days"
             },
-
             {
                 "day": 14,
                 "priority": "High",
@@ -177,7 +171,6 @@ def mock_scorecard(vertical: Vertical):
                 "cis_control": "CIS 14.1",
                 "effort_estimate": "4-6 hours"
             },
-
             {
                 "day": 21,
                 "priority": "Medium",
@@ -188,7 +181,6 @@ def mock_scorecard(vertical: Vertical):
                 "cis_control": "CIS 17.1",
                 "effort_estimate": "1-2 days"
             },
-
             {
                 "day": 30,
                 "priority": "Medium",
@@ -213,7 +205,7 @@ def mock_scorecard(vertical: Vertical):
 
 
 # ============================================================
-# FASTAPI APP
+# FASTAPI
 # ============================================================
 
 app = FastAPI(
@@ -236,7 +228,7 @@ app.add_middleware(
 
 
 # ============================================================
-# HEALTH / ROOT ROUTES
+# BASIC ROUTES
 # ============================================================
 
 @app.get("/")
@@ -265,7 +257,7 @@ async def health():
 
 
 # ============================================================
-# CHAT / ASSESSMENT
+# ASSESSMENT CHAT
 # ============================================================
 
 @app.post("/api/index", response_model=ChatResponse)
@@ -274,7 +266,7 @@ async def health():
 async def chat(req: ChatRequest):
 
     # --------------------------------------------------------
-    # Determine vertical
+    # 1. Determine the selected business vertical
     # --------------------------------------------------------
 
     vertical = req.vertical or Vertical.RETAIL
@@ -285,35 +277,47 @@ async def chat(req: ChatRequest):
         else vertical
     )
 
-    # Get the questions for this business type
-    qs = MOCK_QUESTIONS.get(
+    questions = MOCK_QUESTIONS.get(
         vertical_key,
         MOCK_QUESTIONS["retail"]
     )
 
     # --------------------------------------------------------
-    # Count actual assessment answers
+    # 2. Find every question that has already been displayed
     # --------------------------------------------------------
 
-    user_messages = [
-        m for m in req.conversation_history
-        if m.role == "user"
-    ]
+    already_asked = set()
 
-    # The frontend may include the initial
-    # "I want an assessment for..." message.
-    assessment_messages = [
-        m for m in user_messages
-        if "I want an assessment for" not in m.content
-    ]
+    for message in req.conversation_history:
 
-    user_turns = len(assessment_messages)
+        if message.role != "assistant":
+            continue
+
+        text = message.content.strip()
+
+        if not text:
+            continue
+
+        already_asked.add(text.lower())
 
     # --------------------------------------------------------
-    # ASSESSMENT COMPLETE
+    # 3. Find the first unused question
     # --------------------------------------------------------
 
-    if user_turns >= len(qs):
+    next_question = None
+
+    for question in questions:
+
+        if question.lower() not in already_asked:
+            next_question = question
+            break
+
+    # --------------------------------------------------------
+    # 4. If there are no unused questions, finish assessment
+    # --------------------------------------------------------
+
+    if next_question is None:
+
         return ChatResponse(
             response="",
             scorecard=mock_scorecard(vertical),
@@ -321,25 +325,8 @@ async def chat(req: ChatRequest):
         )
 
     # --------------------------------------------------------
-    # GET NEXT QUESTION
+    # 5. Return the next unused question
     # --------------------------------------------------------
-
-    # IMPORTANT:
-    # Python controls the question order.
-    # Groq is NOT allowed to randomly select questions here.
-    #
-    # This guarantees:
-    #
-    # Question 1 -> index 0
-    # Question 2 -> index 1
-    # Question 3 -> index 2
-    # Question 4 -> index 3
-    # Question 5 -> index 4
-    # Question 6 -> index 5
-    #
-    # Therefore the same question cannot be generated twice.
-
-    next_question = qs[user_turns]
 
     return ChatResponse(
         response=next_question,
