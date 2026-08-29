@@ -1,4 +1,3 @@
-#test
 'use client';
 
 import {
@@ -374,7 +373,8 @@ export default function ChatInterface({
   const [messages, setMessages] =
     useState<ChatMessage[]>([]);
 
-  const [input, setInput] = useState('');
+  const [input, setInput] =
+    useState('');
 
   const [isLoading, setIsLoading] =
     useState(false);
@@ -393,9 +393,8 @@ export default function ChatInterface({
   const [interviewComplete, setInterviewComplete] =
     useState(false);
 
-  const [sessionId] = useState(() =>
-    generateSessionId()
-  );
+  const [sessionId] =
+    useState(() => generateSessionId());
 
   const previousMessageCount =
     useRef(0);
@@ -420,11 +419,6 @@ export default function ChatInterface({
       const firstQuestion =
         FIRST_QUESTIONS[selectedVertical];
 
-      /*
-       * This synthetic user message is kept in the
-       * frontend history so the backend can identify
-       * the selected assessment.
-       */
       setMessages([
         {
           role: 'user',
@@ -492,21 +486,27 @@ export default function ChatInterface({
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
+    const timer =
+      window.setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [messages, interviewComplete]);
+  }, [
+    messages,
+    interviewComplete,
+  ]);
 
   /* ==========================================================
      SUBMIT MESSAGE
      ========================================================== */
 
   const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>
+    event:
+      | React.FormEvent<HTMLFormElement>
+      | KeyboardEvent<HTMLTextAreaElement>
   ) => {
     event.preventDefault();
 
@@ -524,11 +524,9 @@ export default function ChatInterface({
 
     /*
      * IMPORTANT:
-     * conversation_history intentionally contains ONLY
-     * messages that existed before this request.
-     *
-     * The backend receives `message` separately and
-     * appends it to the model conversation itself.
+     * The current user message is sent separately.
+     * The conversation_history contains only messages
+     * that existed BEFORE the current message.
      */
     const conversationHistory =
       messages.map((message) => ({
@@ -566,10 +564,11 @@ export default function ChatInterface({
         response.scorecard;
 
       /*
-       * Some backend/model configurations may return
-       * the scorecard as JSON inside `response`.
-       * Try to recover it safely.
+       * FALLBACK:
+       * Some backend configurations may return
+       * the scorecard as JSON text.
        */
+
       if (
         !receivedScorecard &&
         response.response
@@ -606,7 +605,7 @@ export default function ChatInterface({
             }
           }
         } catch {
-          // Normal text response; not a scorecard.
+          // Not a scorecard JSON response.
         }
       }
 
@@ -642,7 +641,8 @@ export default function ChatInterface({
           ...previous,
           {
             role: 'assistant',
-            content: assistantResponse,
+            content:
+              assistantResponse,
           },
         ]);
       }
@@ -654,13 +654,11 @@ export default function ChatInterface({
       );
 
       /*
-       * Remove ONLY the optimistic user message.
-       * This preserves all previous conversation history.
+       * Remove only the optimistic message.
+       * Preserve all previous conversation history.
        */
       setMessages((previous) => {
-        if (
-          previous.length === 0
-        ) {
+        if (previous.length === 0) {
           return previous;
         }
 
@@ -671,10 +669,7 @@ export default function ChatInterface({
           last.role === 'user' &&
           last.content === userMessage
         ) {
-          return previous.slice(
-            0,
-            -1
-          );
+          return previous.slice(0, -1);
         }
 
         return previous;
@@ -760,10 +755,6 @@ export default function ChatInterface({
         message.role === 'user'
     );
 
-  /*
-   * The first user message is the synthetic
-   * "I want an assessment for..." message.
-   */
   const answeredQuestions =
     Math.max(
       0,
