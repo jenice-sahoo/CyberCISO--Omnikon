@@ -2027,6 +2027,9 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# Explicit Vercel Python runtime entrypoint
+handler = app
+
 
 # ============================================================
 # CORS
@@ -2242,11 +2245,9 @@ async def chat(
 
             return ChatResponse(
 
-                response:
-                    next_question["text"],
+                response=next_question["text"],
 
-                interview_complete:
-                    False
+                interview_complete=False
             )
 
         scorecard = build_scorecard(
@@ -2307,9 +2308,7 @@ async def chat(
 
     return ChatResponse(
 
-        response:
-            next_question["text"],
+        response=next_question["text"],
 
-        interview_complete:
-            False
+        interview_complete=False
     )
