@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 import {
   Shield,
@@ -10,134 +9,57 @@ import {
 
 import ChatInterface from '@/components/ChatInterface';
 
-import { Vertical } from '@/types';
-
-
-const VALID_VERTICALS: Vertical[] = [
-  'retail',
-  'healthcare_clinic',
-  'professional_services',
-];
-
-
 function LoadingScreen() {
-
   return (
-
-    <div className="min-h-screen bg-[#05040b] text-white relative overflow-hidden flex items-center justify-center">
-
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05040b] text-white">
       {/* Background glow */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-1/2 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600/[0.12] blur-[160px]" />
 
-      <div className="absolute inset-0 pointer-events-none">
-
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[450px] rounded-full bg-violet-600/15 blur-[150px]" />
-
-        <div className="absolute left-[-100px] bottom-[-100px] w-[300px] h-[300px] rounded-full bg-blue-600/10 blur-[120px]" />
-
+        <div className="absolute bottom-[-120px] left-[-80px] h-[300px] w-[300px] rounded-full bg-blue-600/[0.08] blur-[130px]" />
       </div>
 
-
       {/* Grid */}
-
       <div
-        className="absolute inset-0 opacity-[0.035]"
+        className="pointer-events-none absolute inset-0 opacity-[0.035]"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)',
-          backgroundSize:
-            '48px 48px',
+          backgroundSize: '48px 48px',
         }}
       />
 
-
       <div className="relative z-10 text-center">
-
-        <div className="relative mx-auto w-16 h-16 mb-6">
-
+        <div className="relative mx-auto mb-6 h-16 w-16">
           <div className="absolute inset-0 rounded-full bg-violet-500/30 blur-2xl" />
 
-          <div className="absolute inset-1 rounded-full bg-gradient-to-br from-violet-400 via-purple-600 to-blue-700 flex items-center justify-center">
-
-            <div className="w-12 h-12 rounded-full bg-[#090813] flex items-center justify-center">
-
-              <Shield className="w-6 h-6 text-violet-200" />
-
+          <div className="absolute inset-1 flex items-center justify-center rounded-full bg-gradient-to-br from-violet-400 via-purple-600 to-blue-700">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#090813]">
+              <Shield className="h-6 w-6 text-violet-200" />
             </div>
-
           </div>
-
         </div>
 
-
-        <div className="flex items-center justify-center gap-2 text-violet-300 mb-2">
-
-          <Sparkles className="w-3.5 h-3.5" />
+        <div className="mb-2 flex items-center justify-center gap-2 text-violet-300">
+          <Sparkles className="h-3.5 w-3.5" />
 
           <span className="text-xs">
             CyberCISO
           </span>
-
         </div>
-
 
         <p className="text-sm text-gray-600">
           Initializing secure assessment...
         </p>
-
       </div>
-
     </div>
   );
 }
 
-
-function AssessContent() {
-
-  const searchParams =
-    useSearchParams();
-
-  const verticalParam =
-    searchParams.get(
-      'vertical'
-    );
-
-
-  const initialVertical:
-    | Vertical
-    | undefined =
-    verticalParam &&
-    VALID_VERTICALS.includes(
-      verticalParam as Vertical
-    )
-      ? (
-          verticalParam as Vertical
-        )
-      : undefined;
-
-
-  return (
-    <ChatInterface
-      initialVertical={
-        initialVertical
-      }
-    />
-  );
-}
-
-
 export default function AssessPage() {
-
   return (
-
-    <Suspense
-      fallback={
-        <LoadingScreen />
-      }
-    >
-
-      <AssessContent />
-
+    <Suspense fallback={<LoadingScreen />}>
+      <ChatInterface />
     </Suspense>
-
   );
 }
