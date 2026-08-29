@@ -110,7 +110,7 @@ async def chat(req: ChatRequest):
     if req.conversation_history and "I want an assessment for" in req.conversation_history[0].content:
         user_turns -= 1
 
-    MAX_TURNS = 7
+    MAX_TURNS = 6
     if user_turns >= MAX_TURNS:
         return ChatResponse(response="", scorecard=mock_scorecard(vertical), interview_complete=True)
 
